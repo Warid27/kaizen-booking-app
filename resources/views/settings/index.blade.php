@@ -257,11 +257,17 @@ function settingsPage() {
             marketing: false
         },
 
-        init() {
-            // Load settings from localStorage if available
-            const savedSettings = localStorage.getItem('userSettings');
-            if (savedSettings) {
-                this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
+        async init() {
+            // Try to load settings from API first
+            try {
+                const response = await apiClient.get('/settings');
+                this.settings = { ...this.settings, ...response.data };
+            } catch (error) {
+                // Fallback to localStorage if API fails
+                const savedSettings = localStorage.getItem('userSettings');
+                if (savedSettings) {
+                    this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
+                }
             }
         },
 
@@ -305,10 +311,9 @@ function settingsPage() {
             this.$store.ui.addToast('info', `${setting} ${status}`);
         },
 
-        saveSettings() {
+        async saveSettings() {
             this.isLoading = true;
             
-            // Mock API payload
             const payload = {
                 notifications: this.settings.notifications,
                 pushNotifications: this.settings.pushNotifications,
@@ -321,16 +326,20 @@ function settingsPage() {
             
             console.log('Settings Save Payload:', JSON.stringify(payload, null, 2));
             
-            // Simulate API call
-            setTimeout(() => {
-                // Save to localStorage
+            try {
+                await apiClient.put('/settings', payload);
+                
+                // Save to localStorage as backup
                 localStorage.setItem('userSettings', JSON.stringify(this.settings));
                 
-                this.isLoading = false;
-                
-                // Show success toast
                 this.$store.ui.addToast('success', 'Settings saved successfully!');
-            }, 1000);
+            } catch (error) {
+                // Save to localStorage if API fails
+                localStorage.setItem('userSettings', JSON.stringify(this.settings));
+                this.$store.ui.addToast('warning', 'Settings saved locally (API unavailable)');
+            } finally {
+                this.isLoading = false;
+            }
         }
     }
 }

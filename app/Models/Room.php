@@ -18,6 +18,17 @@ class Room extends Model
         'name',
         'description',
         'capacity',
+        'location',
+        'amenities',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'amenities' => 'array',
     ];
 
     /**

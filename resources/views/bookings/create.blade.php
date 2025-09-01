@@ -1,81 +1,75 @@
 {{-- resources/views/bookings/create.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Create Booking - BookingApp')
+@section('title', 'Create Booking - KaiBook')
 
 @section('content')
-@php
-$availableRooms = [
-    ['id' => 1, 'name' => 'Deluxe Suite', 'type' => 'Suite', 'capacity' => 4, 'price' => 450],
-    ['id' => 2, 'name' => 'Standard Room', 'type' => 'Standard', 'capacity' => 2, 'price' => 200],
-    ['id' => 3, 'name' => 'Executive Suite', 'type' => 'Suite', 'capacity' => 6, 'price' => 600],
-    ['id' => 4, 'name' => 'Family Room', 'type' => 'Family', 'capacity' => 8, 'price' => 350],
-    ['id' => 5, 'name' => 'Economy Room', 'type' => 'Economy', 'capacity' => 2, 'price' => 150],
-];
-@endphp
-
 <div class="px-4 sm:px-6 lg:px-8" x-data="{ 
     userRole: $store.auth.role,
     formData: {
         room_id: '',
-        guest_name: '',
-        guest_email: '',
-        guest_phone: '',
-        check_in: '',
-        check_out: '',
-        guests: 1,
-        special_requests: ''
+        title: '',
+        description: '',
+        start_time: '',
+        end_time: '',
+        attendees: 1
     },
+    availableRooms: [],
     selectedRoom: null,
-    totalNights: 0,
-    totalPrice: 0,
-    availableRooms: @js($availableRooms),
-    
+
     init() {
-        // Set default dates (today + 1 and today + 3)
-        const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
-        const dayAfter = new Date(today);
-        dayAfter.setDate(today.getDate() + 3);
-        
-        this.formData.check_in = tomorrow.toISOString().split('T')[0];
-        this.formData.check_out = dayAfter.toISOString().split('T')[0];
-        this.calculateTotal();
+        this.loadRooms();
+        // default start/end times: now +1h, +2h
+        const now = new Date();
+        const start = new Date(now.getTime() + 60*60*1000);
+        const end = new Date(now.getTime() + 2*60*60*1000);
+        this.formData.start_time = this.toLocalInput(start);
+        this.formData.end_time = this.toLocalInput(end);
     },
-    
-    selectRoom() {
-        this.selectedRoom = this.availableRooms.find(room => room.id == this.formData.room_id);
-        this.calculateTotal();
-    },
-    
-    calculateTotal() {
-        if (this.formData.check_in && this.formData.check_out && this.selectedRoom) {
-            const checkIn = new Date(this.formData.check_in);
-            const checkOut = new Date(this.formData.check_out);
-            const timeDiff = checkOut.getTime() - checkIn.getTime();
-            this.totalNights = Math.ceil(timeDiff / (1000 * 3600 * 24));
-            this.totalPrice = this.totalNights * this.selectedRoom.price;
-        } else {
-            this.totalNights = 0;
-            this.totalPrice = 0;
+
+    async loadRooms() {
+        try {
+            const data = await window.roomsAPI.getAll();
+            this.availableRooms = Array.isArray(data) ? data : (data.data || []);
+        } catch (e) {
+            this.$store.ui.addToast('error', window.handleApiError(e, 'Failed to load rooms'));
         }
     },
-    
-    createBooking() {
-        // Show loading
-        $store.ui.showLoading();
-        
-        // Simulate API call delay
-        setTimeout(() => {
-            $store.ui.hideLoading();
-            $store.ui.addToast('success', `Booking created successfully for ${this.formData.guest_name}! Total: $${this.totalPrice}`);
-            
-            // Redirect after a short delay to show the toast
-            setTimeout(() => {
-                window.location.href = '/bookings';
-            }, 1500);
-        }, 1000);
+
+    selectRoom() {
+        this.selectedRoom = this.availableRooms.find(r => String(r.id) === String(this.formData.room_id));
+    },
+
+    toLocalInput(d) {
+        const pad = (n) => n.toString().padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    },
+
+    toApiDateTime(v) {
+        // v is from datetime-local (YYYY-MM-DDTHH:mm)
+        if (!v) return '';
+        return v.replace('T', ' ') + ':00';
+    },
+
+    async createBooking() {
+        try {
+            this.$store.ui.showLoading();
+            const payload = {
+                room_id: Number(this.formData.room_id),
+                title: this.formData.title,
+                description: this.formData.description,
+                start_time: this.toApiDateTime(this.formData.start_time),
+                end_time: this.toApiDateTime(this.formData.end_time),
+                attendees: Number(this.formData.attendees)
+            };
+            await window.bookingsAPI.create(payload);
+            this.$store.ui.addToast('success', 'Booking created successfully');
+            window.location.href = '/bookings';
+        } catch (error) {
+            this.$store.ui.addToast('error', window.handleApiError(error, 'Failed to create booking'));
+        } finally {
+            this.$store.ui.hideLoading();
+        }
     }
 }">
     <x-breadcrumbs :links="[
@@ -131,123 +125,91 @@ $availableRooms = [
                                 >
                                     <option value="">Choose a room...</option>
                                     <template x-for="room in availableRooms" :key="room.id">
-                                        <option :value="room.id" x-text="`${room.name} - ${room.type} (${room.capacity} guests) - $${room.price}/night`"></option>
+                                        <option :value="room.id" x-text="`${room.name} (${room.capacity} capacity)`"></option>
                                     </template>
                                 </select>
                             </div>
                         </div>
 
-                        <!-- Guest Information -->
-                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                        <!-- Booking Details -->
+                        <div class="grid grid-cols-1 gap-6">
                             <div>
-                                <label for="guest_name" class="block text-sm font-medium leading-6 text-gray-900">Guest Name</label>
+                                <label for="title" class="block text-sm font-medium leading-6 text-gray-900">Title</label>
                                 <div class="mt-2">
                                     <input 
                                         type="text" 
-                                        name="guest_name" 
-                                        id="guest_name" 
-                                        x-model="formData.guest_name"
+                                        name="title" 
+                                        id="title" 
+                                        x-model="formData.title"
                                         class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        placeholder="Full name"
+                                        placeholder="Team Meeting"
                                         required
                                     >
                                 </div>
                             </div>
 
                             <div>
-                                <label for="guest_email" class="block text-sm font-medium leading-6 text-gray-900">Email Address</label>
+                                <label for="description" class="block text-sm font-medium leading-6 text-gray-900">Description</label>
+                                <div class="mt-2">
+                                    <textarea 
+                                        id="description" 
+                                        name="description" 
+                                        rows="3" 
+                                        x-model="formData.description"
+                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                                        placeholder="Weekly team standup meeting"
+                                    ></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Start/End and Attendees -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                            <div class="sm:col-span-1">
+                                <label for="start_time" class="block text-sm font-medium leading-6 text-gray-900">Start Time</label>
                                 <div class="mt-2">
                                     <input 
-                                        type="email" 
-                                        name="guest_email" 
-                                        id="guest_email" 
-                                        x-model="formData.guest_email"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        placeholder="email@example.com"
+                                        type="datetime-local" 
+                                        name="start_time" 
+                                        id="start_time" 
+                                        x-model="formData.start_time"
+                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                                         required
                                     >
                                 </div>
                             </div>
 
-                            <div>
-                                <label for="guest_phone" class="block text-sm font-medium leading-6 text-gray-900">Phone Number</label>
+                            <div class="sm:col-span-1">
+                                <label for="end_time" class="block text-sm font-medium leading-6 text-gray-900">End Time</label>
                                 <div class="mt-2">
                                     <input 
-                                        type="tel" 
-                                        name="guest_phone" 
-                                        id="guest_phone" 
-                                        x-model="formData.guest_phone"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        placeholder="+1 (555) 123-4567"
+                                        type="datetime-local" 
+                                        name="end_time" 
+                                        id="end_time" 
+                                        x-model="formData.end_time"
+                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                                        required
                                     >
                                 </div>
                             </div>
 
-                            <div>
-                                <label for="guests" class="block text-sm font-medium leading-6 text-gray-900">Number of Guests</label>
+                            <div class="sm:col-span-1">
+                                <label for="attendees" class="block text-sm font-medium leading-6 text-gray-900">Attendees</label>
                                 <div class="mt-2">
                                     <input 
                                         type="number" 
-                                        name="guests" 
-                                        id="guests" 
+                                        name="attendees" 
+                                        id="attendees" 
                                         min="1" 
-                                        :max="selectedRoom ? selectedRoom.capacity : 10"
-                                        x-model="formData.guests"
+                                        :max="selectedRoom ? selectedRoom.capacity : 100"
+                                        x-model="formData.attendees"
                                         class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                                         required
                                     >
                                 </div>
                                 <p class="mt-1 text-sm text-gray-500" x-show="selectedRoom">
-                                    Maximum capacity: <span x-text="selectedRoom.capacity"></span> guests
+                                    Room capacity: <span x-text="selectedRoom.capacity"></span>
                                 </p>
-                            </div>
-                        </div>
-
-                        <!-- Dates -->
-                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                            <div>
-                                <label for="check_in" class="block text-sm font-medium leading-6 text-gray-900">Check-in Date</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="date" 
-                                        name="check_in" 
-                                        id="check_in" 
-                                        x-model="formData.check_in"
-                                        @change="calculateTotal()"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        required
-                                    >
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="check_out" class="block text-sm font-medium leading-6 text-gray-900">Check-out Date</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="date" 
-                                        name="check_out" 
-                                        id="check_out" 
-                                        x-model="formData.check_out"
-                                        @change="calculateTotal()"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        required
-                                    >
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Special Requests -->
-                        <div>
-                            <label for="special_requests" class="block text-sm font-medium leading-6 text-gray-900">Special Requests</label>
-                            <div class="mt-2">
-                                <textarea 
-                                    id="special_requests" 
-                                    name="special_requests" 
-                                    rows="3" 
-                                    x-model="formData.special_requests"
-                                    class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                    placeholder="Any special requests or requirements..."
-                                ></textarea>
                             </div>
                         </div>
 
@@ -264,7 +226,7 @@ $availableRooms = [
                                 type="button" 
                                 @click="createBooking()"
                                 class="inline-flex items-center space-x-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105"
-                                :disabled="!formData.room_id || !formData.guest_name || !formData.guest_email || !formData.check_in || !formData.check_out"
+                                :disabled="!formData.room_id || !formData.title || !formData.start_time || !formData.end_time || !formData.attendees"
                             >
                                 <i data-lucide="calendar-plus" class="h-4 w-4"></i>
                                 <span>Create Booking</span>
@@ -283,46 +245,35 @@ $availableRooms = [
                         <div class="space-y-3">
                             <div>
                                 <div class="text-sm font-medium text-gray-900" x-text="selectedRoom?.name"></div>
-                                <div class="text-sm text-gray-500" x-text="selectedRoom?.type"></div>
                             </div>
                             <div class="flex justify-between text-sm">
                                 <span class="text-gray-500">Capacity:</span>
-                                <span class="text-gray-900" x-text="`${selectedRoom?.capacity} guests`"></span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Price per night:</span>
-                                <span class="text-gray-900">$<span x-text="selectedRoom?.price"></span></span>
+                                <span class="text-gray-900" x-text="`${selectedRoom?.capacity} people`"></span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Booking Summary -->
-                <div class="bg-white shadow sm:rounded-lg" x-show="totalNights > 0">
+                <div class="bg-white shadow sm:rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Booking Summary</h3>
                         <div class="space-y-3">
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Check-in:</span>
-                                <span class="text-gray-900" x-text="formData.check_in"></span>
+                                <span class="text-gray-500">Title:</span>
+                                <span class="text-gray-900" x-text="formData.title || '-' "></span>
                             </div>
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Check-out:</span>
-                                <span class="text-gray-900" x-text="formData.check_out"></span>
+                                <span class="text-gray-500">Start:</span>
+                                <span class="text-gray-900" x-text="formData.start_time"></span>
                             </div>
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Nights:</span>
-                                <span class="text-gray-900" x-text="totalNights"></span>
+                                <span class="text-gray-500">End:</span>
+                                <span class="text-gray-900" x-text="formData.end_time"></span>
                             </div>
                             <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Guests:</span>
-                                <span class="text-gray-900" x-text="formData.guests"></span>
-                            </div>
-                            <div class="border-t pt-3">
-                                <div class="flex justify-between">
-                                    <span class="text-base font-medium text-gray-900">Total:</span>
-                                    <span class="text-base font-medium text-gray-900">$<span x-text="totalPrice"></span></span>
-                                </div>
+                                <span class="text-gray-500">Attendees:</span>
+                                <span class="text-gray-900" x-text="formData.attendees"></span>
                             </div>
                         </div>
                     </div>
@@ -341,7 +292,7 @@ $availableRooms = [
                                 Need Help?
                             </h3>
                             <div class="mt-2 text-sm text-blue-700">
-                                <p>This is a demo booking form. No real reservation will be made. All data is for demonstration purposes only.</p>
+                                <p>Fill in meeting details and submit. The booking will be created via the API.</p>
                             </div>
                         </div>
                     </div>

@@ -25,7 +25,7 @@
                         <!-- User Info -->
                         <h3 class="text-xl font-semibold text-gray-900" x-text="userInfo.name"></h3>
                         <p class="text-gray-600 mt-1" x-text="userInfo.email"></p>
-                        <p class="text-sm text-gray-500 mt-2">Member since January 2024</p>
+                        <p class="text-sm text-gray-500 mt-2" x-text="userInfo.memberSince ? ('Member since ' + userInfo.memberSince) : ''"></p>
                         
                         <!-- Quick Stats -->
                         <div class="mt-6 grid grid-cols-2 gap-4 text-center">
@@ -186,67 +186,86 @@ function profilePage() {
     return {
         isLoading: false,
         userInfo: {
-            name: 'John Doe',
-            email: 'john@example.com'
+            name: '',
+            email: '',
+            memberSince: ''
         },
         profileForm: {
-            name: 'John Doe',
-            email: 'john@example.com'
+            name: '',
+            email: ''
         },
         passwordForm: {
             password: '',
             password_confirmation: ''
         },
 
-        updateProfile() {
+        init() {
+            this.loadUser();
+        },
+
+        async loadUser() {
+            try {
+                const data = await window.authAPI.getUser();
+                this.userInfo.name = data?.name || '';
+                this.userInfo.email = data?.email || '';
+                if (data?.created_at) {
+                    const d = new Date(data.created_at);
+                    this.userInfo.memberSince = isNaN(d) ? '' : d.toLocaleDateString();
+                }
+                this.profileForm.name = this.userInfo.name;
+                this.profileForm.email = this.userInfo.email;
+                // keep store/display name in sync where used elsewhere
+                if (this.$store?.auth) {
+                    this.$store.auth.userName = this.userInfo.name;
+                    localStorage.setItem('mockUserName', this.userInfo.name);
+                }
+            } catch (error) {
+                this.$store.ui.addToast('error', window.handleApiError(error, 'Failed to load profile'));
+            }
+        },
+
+        async updateProfile() {
             this.isLoading = true;
-            
-            // Mock API payload (as requested)
             const payload = {
                 name: this.profileForm.name,
                 email: this.profileForm.email
             };
-            
-            console.log('Profile Update Payload:', JSON.stringify(payload, null, 2));
-            
-            // Simulate API call
-            setTimeout(() => {
+            try {
+                await window.profileAPI.updateProfile(payload);
                 this.userInfo.name = this.profileForm.name;
                 this.userInfo.email = this.profileForm.email;
-                this.isLoading = false;
-                
-                // Show success toast
+                if (this.$store?.auth) {
+                    this.$store.auth.userName = this.profileForm.name;
+                    localStorage.setItem('mockUserName', this.profileForm.name);
+                }
                 this.$store.ui.addToast('success', 'Profile updated successfully!');
-            }, 1000);
+            } catch (error) {
+                this.$store.ui.addToast('error', window.handleApiError(error, 'Failed to update profile'));
+            } finally {
+                this.isLoading = false;
+            }
         },
 
-        changePassword() {
+        async changePassword() {
             if (this.passwordForm.password !== this.passwordForm.password_confirmation) {
                 this.$store.ui.addToast('error', 'Passwords do not match!');
                 return;
             }
-
             this.isLoading = true;
-            
-            // Mock API payload (as requested)
             const payload = {
-                name: this.userInfo.name,
-                email: this.userInfo.email,
                 password: this.passwordForm.password,
                 password_confirmation: this.passwordForm.password_confirmation
             };
-            
-            console.log('Password Change Payload:', JSON.stringify(payload, null, 2));
-            
-            // Simulate API call
-            setTimeout(() => {
+            try {
+                await window.profileAPI.changePassword(payload);
                 this.passwordForm.password = '';
                 this.passwordForm.password_confirmation = '';
-                this.isLoading = false;
-                
-                // Show success toast
                 this.$store.ui.addToast('success', 'Password changed successfully!');
-            }, 1000);
+            } catch (error) {
+                this.$store.ui.addToast('error', window.handleApiError(error, 'Failed to change password'));
+            } finally {
+                this.isLoading = false;
+            }
         }
     }
 }

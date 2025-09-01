@@ -1,34 +1,31 @@
 {{-- resources/views/rooms/index.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Rooms Management - BookingApp')
+@section('title', 'Rooms Management - KaiBook')
 
 @section('content')
-@php
-$rooms = [
-    ['id' => 1, 'name' => 'Deluxe Suite', 'type' => 'Suite', 'capacity' => 4, 'price' => 450, 'status' => 'Available', 'amenities' => 'WiFi, TV, Mini Bar, Balcony'],
-    ['id' => 2, 'name' => 'Standard Room', 'type' => 'Standard', 'capacity' => 2, 'price' => 200, 'status' => 'Occupied', 'amenities' => 'WiFi, TV'],
-    ['id' => 3, 'name' => 'Executive Suite', 'type' => 'Suite', 'capacity' => 6, 'price' => 600, 'status' => 'Available', 'amenities' => 'WiFi, TV, Mini Bar, Balcony, Jacuzzi'],
-    ['id' => 4, 'name' => 'Family Room', 'type' => 'Family', 'capacity' => 8, 'price' => 350, 'status' => 'Maintenance', 'amenities' => 'WiFi, TV, Kitchenette'],
-    ['id' => 5, 'name' => 'Economy Room', 'type' => 'Economy', 'capacity' => 2, 'price' => 150, 'status' => 'Available', 'amenities' => 'WiFi'],
-    ['id' => 6, 'name' => 'Presidential Suite', 'type' => 'Suite', 'capacity' => 10, 'price' => 1200, 'status' => 'Available', 'amenities' => 'WiFi, TV, Mini Bar, Balcony, Jacuzzi, Butler Service'],
-];
-@endphp
-
 <div class="px-4 sm:px-6 lg:px-8" x-data="{ 
     userRole: $store.auth.role,
     searchTerm: '', 
-    filteredRooms: @js($rooms),
-    allRooms: @js($rooms),
+    filteredRooms: [],
+    allRooms: [],
+    async loadRooms() {
+        try {
+            const data = await window.roomsAPI.getAll();
+            this.allRooms = Array.isArray(data) ? data : (data.data || []);
+            this.filteredRooms = this.allRooms;
+        } catch (error) {
+            this.$store.ui.addToast('error', window.handleApiError(error, 'Failed to load rooms'));
+        }
+    },
     filterRooms() {
+        const searchLower = this.searchTerm.toLowerCase();
         this.filteredRooms = this.allRooms.filter(room => {
-            const searchLower = this.searchTerm.toLowerCase();
-            return room.name.toLowerCase().includes(searchLower) ||
-                   room.type.toLowerCase().includes(searchLower) ||
-                   room.status.toLowerCase().includes(searchLower);
+            return (room.name || '').toLowerCase().includes(searchLower) ||
+                   (room.description || '').toLowerCase().includes(searchLower);
         });
     }
-}">
+}" x-init="loadRooms()">
     <x-breadcrumbs :links="[
         ['label' => 'Home', 'href' => '/'],
         ['label' => 'Dashboard', 'href' => '/dashboard'],
@@ -57,7 +54,7 @@ $rooms = [
         <div class="sm:flex sm:items-center">
             <div class="sm:flex-auto">
                 <h1 class="text-2xl font-semibold leading-6 text-gray-900">Rooms Management</h1>
-                <p class="mt-2 text-sm text-gray-700">Manage all rooms, their availability, and pricing.</p>
+                <p class="mt-2 text-sm text-gray-700">Manage all rooms and their availability.</p>
             </div>
             <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
                 <a href="/rooms/create" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
@@ -95,23 +92,16 @@ $rooms = [
                                 <div class="px-4 py-5 sm:p-6">
                                     <div class="flex items-center justify-between">
                                         <h3 class="text-lg font-medium text-gray-900" x-text="room.name"></h3>
-                                        <span 
-                                            class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
-                                            :class="{
-                                                'bg-green-100 text-green-800': room.status === 'Available',
-                                                'bg-red-100 text-red-800': room.status === 'Occupied',
-                                                'bg-yellow-100 text-yellow-800': room.status === 'Maintenance'
-                                            }"
-                                            x-text="room.status">
+                                        <span class="ml-2 inline-flex px-2 py-0.5 text-xs font-semibold rounded-full"
+                                              :class="(room.bookings_count || 0) > 0 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'"
+                                              x-text="(room.bookings_count || 0) > 0 ? 'Booked' : 'Available'">
                                         </span>
                                     </div>
                                     <div class="mt-2">
                                         <p class="text-sm text-gray-500">
-                                            <span x-text="room.type"></span> • 
-                                            <span x-text="room.capacity"></span> guests • 
-                                            $<span x-text="room.price"></span>/night
+                                            Capacity: <span x-text="room.capacity"></span>
                                         </p>
-                                        <p class="mt-1 text-sm text-gray-600" x-text="room.amenities"></p>
+                                        <p class="mt-1 text-sm text-gray-600" x-text="room.description"></p>
                                     </div>
                                     <div class="mt-4 flex space-x-2">
                                         <a 
@@ -128,21 +118,6 @@ $rooms = [
                                             <i data-lucide="edit" class="h-3 w-3"></i>
                                             <span>Edit</span>
                                         </a>
-                                        <button 
-                                            type="button"
-                                            class="inline-flex items-center space-x-1 px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 transition-all duration-200 hover:scale-105"
-                                            @click="$store.ui.showModal(
-                                                'Delete Room', 
-                                                `Are you sure you want to delete ${room.name}? This action cannot be undone. (This is a demo - no actual deletion will occur)`,
-                                                () => $store.ui.addToast('success', `Room ${room.name} deleted successfully! (Mock operation)`),
-                                                null,
-                                                'Delete',
-                                                'Cancel'
-                                            )"
-                                        >
-                                            <i data-lucide="trash-2" class="h-3 w-3"></i>
-                                            <span>Delete</span>
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -167,18 +142,6 @@ $rooms = [
                     <div class="text-center">
                         <div class="text-2xl font-bold text-gray-900" x-text="allRooms.length"></div>
                         <div class="text-sm text-gray-500">Total Rooms</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-green-600" x-text="allRooms.filter(r => r.status === 'Available').length"></div>
-                        <div class="text-sm text-gray-500">Available</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-red-600" x-text="allRooms.filter(r => r.status === 'Occupied').length"></div>
-                        <div class="text-sm text-gray-500">Occupied</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-yellow-600" x-text="allRooms.filter(r => r.status === 'Maintenance').length"></div>
-                        <div class="text-sm text-gray-500">Maintenance</div>
                     </div>
                 </div>
             </div>

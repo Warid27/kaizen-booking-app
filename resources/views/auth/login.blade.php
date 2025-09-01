@@ -1,7 +1,7 @@
 {{-- resources/views/auth/login.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Login - BookingApp')
+@section('title', 'Login - KaiBook')
 
 @section('content')
 <div class="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -19,16 +19,31 @@
 
     <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-            <form class="space-y-6" action="#" x-data="{ 
-                email: 'demo@example.com', 
-                password: 'password',
-                loginAsUser() {
-                    $store.auth.login('user');
-                    window.location.href = '/dashboard';
-                },
-                loginAsAdmin() {
-                    $store.auth.login('admin');
-                    window.location.href = '/dashboard';
+            <form class="space-y-6" @submit.prevent="login" x-data="{ 
+                email: '',
+                password: '',
+                isLoading: false,
+                errorMessage: '',
+                async login() {
+                    this.isLoading = true;
+                    this.errorMessage = '';
+                    
+                    try {
+                        const result = await $store.auth.login({
+                            email: this.email,
+                            password: this.password
+                        });
+
+                        if (result && result.success) {
+                            window.location.href = '/dashboard';
+                        } else {
+                            this.errorMessage = (result && result.error) ? result.error : 'Login failed. Please check your credentials.';
+                        }
+                    } catch (error) {
+                        this.errorMessage = window.handleApiError(error, 'An error occurred during login. Please try again.');
+                    } finally {
+                        this.isLoading = false;
+                    }
                 }
             }">
                 <div>
@@ -61,6 +76,10 @@
                     </div>
                 </div>
 
+                <div x-show="errorMessage" class="text-sm text-red-600">
+                    <span x-text="errorMessage"></span>
+                </div>
+
                 <div class="flex items-center justify-between">
                     <div class="flex items-center">
                         <input 
@@ -73,61 +92,20 @@
                     </div>
 
                     <div class="text-sm leading-6">
-                        <a href="#" class="font-semibold text-blue-600 hover:text-blue-500">Forgot password?</a>
+                        <a href="/password/reset" class="font-semibold text-blue-600 hover:text-blue-500">Forgot password?</a>
                     </div>
                 </div>
 
-                <!-- Mock Login Buttons -->
-                <div class="space-y-3">
+                <div>
                     <button 
-                        type="button"
-                        @click="loginAsUser()"
-                        class="flex w-full justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                        type="submit"
+                        :disabled="isLoading"
+                        class="flex w-full justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
                     >
-                        Login as User (Mock)
-                    </button>
-                    
-                    <button 
-                        type="button"
-                        @click="loginAsAdmin()"
-                        class="flex w-full justify-center rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
-                    >
-                        Login as Admin (Mock)
+                        <span x-text="isLoading ? 'Signing in...' : 'Sign in'"></span>
                     </button>
                 </div>
             </form>
-
-            <!-- Demo Notice -->
-            <div class="mt-6">
-                <div class="relative">
-                    <div class="absolute inset-0 flex items-center">
-                        <div class="w-full border-t border-gray-300" />
-                    </div>
-                    <div class="relative flex justify-center text-sm font-medium leading-6">
-                        <span class="bg-white px-6 text-gray-900">Demo Mode</span>
-                    </div>
-                </div>
-
-                <div class="mt-6">
-                    <div class="bg-blue-50 border border-blue-200 rounded-md p-4">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
-                            <div class="ml-3">
-                                <h3 class="text-sm font-medium text-blue-800">
-                                    Mock Authentication
-                                </h3>
-                                <div class="mt-2 text-sm text-blue-700">
-                                    <p>This is a demo login. No real authentication is performed. Use the buttons above to simulate login as different user roles.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>

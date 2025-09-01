@@ -1,38 +1,59 @@
 {{-- resources/views/rooms/edit.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Edit Room - BookingApp')
+@section('title', 'Edit Room - KaiBook')
 
 @section('content')
-@php
-// Mock room data - in real app this would come from route parameter
-$room = [
-    'id' => 1,
-    'name' => 'Deluxe Suite',
-    'type' => 'Suite',
-    'capacity' => 4,
-    'price' => 450,
-    'status' => 'Available',
-    'amenities' => 'WiFi, TV, Mini Bar, Balcony',
-    'description' => 'Spacious suite with stunning city views, perfect for business travelers and couples seeking luxury accommodation.'
-];
-@endphp
-
 <div class="px-4 sm:px-6 lg:px-8" x-data="{ 
     userRole: $store.auth.role,
-    formData: @js($room),
-    updateRoom() {
-        // Mock update functionality
-        alert('Room updated successfully! (Mock operation)');
-        window.location.href = '/rooms/' + this.formData.id;
+    loading: true,
+    error: null,
+    formData: { id: null, name: '', description: '', capacity: null, location: '', amenitiesText: '' },
+    get id() { return parseInt(window.location.pathname.split('/').slice(-2)[0]); },
+    async loadRoom() {
+        try {
+            const resp = await window.roomsAPI.getById(this.id);
+            const room = resp.data || resp;
+            this.formData.id = room.id;
+            this.formData.name = room.name || '';
+            this.formData.description = room.description || '';
+            this.formData.capacity = room.capacity ?? null;
+            this.formData.location = room.location || '';
+            // amenities in API may be array; join to comma-separated for editing
+            const am = Array.isArray(room.amenities) ? room.amenities : (room.amenities ? [room.amenities] : []);
+            this.formData.amenitiesText = am.join(', ');
+        } catch (e) {
+            this.error = window.handleApiError ? window.handleApiError(e, 'Failed to load room') : 'Failed to load room';
+            this.$store.ui && this.$store.ui.addToast && this.$store.ui.addToast('error', this.error);
+        } finally {
+            this.loading = false;
+        }
+    },
+    async updateRoom() {
+        const payload = {
+            name: this.formData.name,
+            description: this.formData.description,
+            capacity: Number(this.formData.capacity),
+            location: this.formData.location || null,
+            amenities: this.formData.amenitiesText
+                ? this.formData.amenitiesText.split(',').map(s => s.trim()).filter(Boolean)
+                : []
+        };
+        try {
+            await window.roomsAPI.update(this.formData.id ?? this.id, payload);
+            this.$store.ui && this.$store.ui.addToast && this.$store.ui.addToast('success', 'Room updated successfully');
+            window.location.href = `/rooms/${this.formData.id ?? this.id}`;
+        } catch (e) {
+            const msg = window.handleApiError ? window.handleApiError(e, 'Failed to update room') : 'Failed to update room';
+            this.$store.ui && this.$store.ui.addToast && this.$store.ui.addToast('error', msg);
+        }
     }
-}">
+}" x-init="loadRoom()">
     <x-breadcrumbs :links="[
         ['label' => 'Home', 'href' => '/'],
         ['label' => 'Dashboard', 'href' => '/dashboard'],
         ['label' => 'Rooms', 'href' => '/rooms'],
-        ['label' => $room['name'], 'href' => '/rooms/' . $room['id']],
-        ['label' => 'Edit', 'href' => '/rooms/' . $room['id'] . '/edit']
+        ['label' => 'Edit', 'href' => request()->path()]
     ]" />
 
     <!-- Check if user is admin -->
@@ -57,7 +78,7 @@ $room = [
         <div class="sm:flex sm:items-center">
             <div class="sm:flex-auto">
                 <h1 class="text-2xl font-semibold leading-6 text-gray-900">Edit Room</h1>
-                <p class="mt-2 text-sm text-gray-700">Update room details and pricing information.</p>
+                <p class="mt-2 text-sm text-gray-700">Update room details.</p>
             </div>
         </div>
 
@@ -80,25 +101,6 @@ $room = [
                             </div>
                         </div>
 
-                        <!-- Room Type -->
-                        <div>
-                            <label for="type" class="block text-sm font-medium leading-6 text-gray-900">Room Type</label>
-                            <div class="mt-2">
-                                <select 
-                                    id="type" 
-                                    name="type" 
-                                    x-model="formData.type"
-                                    class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                >
-                                    <option value="Economy">Economy</option>
-                                    <option value="Standard">Standard</option>
-                                    <option value="Deluxe">Deluxe</option>
-                                    <option value="Suite">Suite</option>
-                                    <option value="Family">Family</option>
-                                </select>
-                            </div>
-                        </div>
-
                         <!-- Capacity -->
                         <div>
                             <label for="capacity" class="block text-sm font-medium leading-6 text-gray-900">Guest Capacity</label>
@@ -108,43 +110,25 @@ $room = [
                                     name="capacity" 
                                     id="capacity" 
                                     min="1" 
-                                    max="20"
-                                    x-model="formData.capacity"
+                                    max="1000"
+                                    x-model.number="formData.capacity"
                                     class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                                 >
                             </div>
                         </div>
 
-                        <!-- Price -->
+                        <!-- Location -->
                         <div>
-                            <label for="price" class="block text-sm font-medium leading-6 text-gray-900">Price per Night ($)</label>
+                            <label for="location" class="block text-sm font-medium leading-6 text-gray-900">Location</label>
                             <div class="mt-2">
                                 <input 
-                                    type="number" 
-                                    name="price" 
-                                    id="price" 
-                                    min="0" 
-                                    step="0.01"
-                                    x-model="formData.price"
+                                    type="text" 
+                                    name="location" 
+                                    id="location" 
+                                    x-model="formData.location"
+                                    placeholder="e.g. 2nd Floor, East Wing"
                                     class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                                 >
-                            </div>
-                        </div>
-
-                        <!-- Status -->
-                        <div>
-                            <label for="status" class="block text-sm font-medium leading-6 text-gray-900">Room Status</label>
-                            <div class="mt-2">
-                                <select 
-                                    id="status" 
-                                    name="status" 
-                                    x-model="formData.status"
-                                    class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                >
-                                    <option value="Available">Available</option>
-                                    <option value="Occupied">Occupied</option>
-                                    <option value="Maintenance">Maintenance</option>
-                                </select>
                             </div>
                         </div>
                     </div>
@@ -157,7 +141,7 @@ $room = [
                                 type="text" 
                                 name="amenities" 
                                 id="amenities" 
-                                x-model="formData.amenities"
+                                x-model="formData.amenitiesText"
                                 class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                             >
                         </div>
@@ -181,7 +165,7 @@ $room = [
                     <!-- Form Actions -->
                     <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                         <a 
-                            :href="`/rooms/${formData.id}`"
+                            :href="`/rooms/${formData.id ?? id}`"
                             class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                         >
                             Cancel
@@ -205,23 +189,11 @@ $room = [
                 <div class="px-4 py-5 sm:p-6">
                     <div class="flex items-center justify-between">
                         <h3 class="text-lg font-medium text-gray-900" x-text="formData.name"></h3>
-                        <span 
-                            class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
-                            :class="{
-                                'bg-green-100 text-green-800': formData.status === 'Available',
-                                'bg-red-100 text-red-800': formData.status === 'Occupied',
-                                'bg-yellow-100 text-yellow-800': formData.status === 'Maintenance'
-                            }"
-                            x-text="formData.status">
-                        </span>
                     </div>
                     <div class="mt-2">
-                        <p class="text-sm text-gray-500">
-                            <span x-text="formData.type"></span> • 
-                            <span x-text="formData.capacity"></span> guests • 
-                            $<span x-text="formData.price"></span>/night
-                        </p>
-                        <p class="mt-1 text-sm text-gray-600" x-text="formData.amenities"></p>
+                        <p class="text-sm text-gray-500"><span x-text="formData.capacity"></span> guests</p>
+                        <p class="mt-1 text-sm text-gray-600" x-text="formData.location"></p>
+                        <p class="mt-1 text-sm text-gray-600" x-text="formData.amenitiesText"></p>
                         <p class="mt-2 text-sm text-gray-700" x-text="formData.description"></p>
                     </div>
                 </div>

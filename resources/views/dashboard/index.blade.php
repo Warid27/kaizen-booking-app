@@ -1,7 +1,7 @@
 {{-- resources/views/dashboard/index.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Dashboard - BookingApp')
+@section('title', 'Dashboard - KaiBook')
 
 @section('content')
 @php
@@ -9,21 +9,31 @@ $userBookings = [
     ['id' => 1, 'room_name' => 'Deluxe Suite', 'check_in' => '2024-08-25', 'check_out' => '2024-08-27', 'status' => 'Confirmed'],
     ['id' => 2, 'room_name' => 'Standard Room', 'check_in' => '2024-09-15', 'check_out' => '2024-09-17', 'status' => 'Pending'],
 ];
-
-$adminStats = [
-    'total_rooms' => 12,
-    'occupied_rooms' => 8,
-    'pending_bookings' => 3,
-    'total_revenue' => 15750,
-    'recent_bookings' => [
-        ['id' => 1, 'guest' => 'John Smith', 'room' => 'Deluxe Suite', 'date' => '2024-08-25', 'amount' => 450],
-        ['id' => 2, 'guest' => 'Sarah Johnson', 'room' => 'Standard Room', 'date' => '2024-08-26', 'amount' => 200],
-        ['id' => 3, 'guest' => 'Michael Brown', 'room' => 'Executive Suite', 'date' => '2024-08-28', 'amount' => 600],
-    ]
-];
 @endphp
 
-<div class="px-4 sm:px-6 lg:px-8" x-data="{ userRole: $store.auth.role }">
+<div class="px-4 sm:px-6 lg:px-8" x-data="{
+    userRole: $store.auth.role,
+    rooms: [],
+    bookings: [],
+    get totalRooms() { return this.rooms.length; },
+    get occupiedRooms() { return this.rooms.filter(r => (r.bookings_count || 0) > 0).length; },
+    get occupancyPercent() { return this.totalRooms ? Math.round((this.occupiedRooms / this.totalRooms) * 100) : 0; },
+    get recentBookings() {
+        const arr = this.bookings.slice();
+        arr.sort((a,b) => new Date(b.created_at || b.start_time || 0) - new Date(a.created_at || a.start_time || 0));
+        return arr.slice(0, 5);
+    },
+    async loadData() {
+        try {
+            const roomsResp = await window.roomsAPI.getAll();
+            this.rooms = roomsResp.data || roomsResp || [];
+        } catch (e) { /* noop */ }
+        try {
+            const bookingsResp = await window.bookingsAPI.getAll();
+            this.bookings = bookingsResp.data || bookingsResp || [];
+        } catch (e) { /* noop */ }
+    }
+}" x-init="loadData()">
     <x-breadcrumbs :links="[
         ['label' => 'Home', 'href' => '/'],
         ['label' => 'Dashboard', 'href' => '/dashboard']
@@ -187,7 +197,7 @@ $adminStats = [
                             <div class="ml-5 w-0 flex-1">
                                 <dl>
                                     <dt class="text-sm font-medium text-gray-500 truncate">Total Rooms</dt>
-                                    <dd class="text-lg font-medium text-gray-900">{{ $adminStats['total_rooms'] }}</dd>
+                                    <dd class="text-lg font-medium text-gray-900" x-text="totalRooms"></dd>
                                 </dl>
                             </div>
                         </div>
@@ -210,14 +220,14 @@ $adminStats = [
                             <div class="ml-5 w-0 flex-1">
                                 <dl>
                                     <dt class="text-sm font-medium text-gray-500 truncate">Occupied</dt>
-                                    <dd class="text-lg font-medium text-gray-900">{{ $adminStats['occupied_rooms'] }}</dd>
+                                    <dd class="text-lg font-medium text-gray-900" x-text="occupiedRooms"></dd>
                                 </dl>
                             </div>
                         </div>
                     </div>
                     <div class="bg-gray-50 px-5 py-3">
                         <div class="text-sm">
-                            <span class="text-gray-500">{{ round(($adminStats['occupied_rooms'] / $adminStats['total_rooms']) * 100) }}% occupancy</span>
+                            <span class="text-gray-500" x-text="occupancyPercent + '% occupancy'"></span>
                         </div>
                     </div>
                 </div>
@@ -232,38 +242,15 @@ $adminStats = [
                             </div>
                             <div class="ml-5 w-0 flex-1">
                                 <dl>
-                                    <dt class="text-sm font-medium text-gray-500 truncate">Pending</dt>
-                                    <dd class="text-lg font-medium text-gray-900">{{ $adminStats['pending_bookings'] }}</dd>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Recent Bookings</dt>
+                                    <dd class="text-lg font-medium text-gray-900">View</dd>
                                 </dl>
                             </div>
                         </div>
                     </div>
                     <div class="bg-gray-50 px-5 py-3">
                         <div class="text-sm">
-                            <a href="/bookings" class="font-medium text-blue-700 hover:text-blue-900">Review bookings</a>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="p-5">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                                </svg>
-                            </div>
-                            <div class="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt class="text-sm font-medium text-gray-500 truncate">Revenue</dt>
-                                    <dd class="text-lg font-medium text-gray-900">${{ number_format($adminStats['total_revenue']) }}</dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-gray-50 px-5 py-3">
-                        <div class="text-sm">
-                            <span class="text-gray-500">This month</span>
+                            <a href="/bookings" class="font-medium text-blue-700 hover:text-blue-900">View all bookings</a>
                         </div>
                     </div>
                 </div>
@@ -292,18 +279,19 @@ $adminStats = [
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        @foreach($adminStats['recent_bookings'] as $booking)
-                                        <tr>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $booking['guest'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $booking['room'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $booking['date'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${{ $booking['amount'] }}</td>
+                                        <template x-for="b in recentBookings" :key="b.id">
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="b.user?.name || ('User #' + (b.user_id ?? ''))"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="b.room?.name || ('Room #' + (b.room_id ?? ''))"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="new Date(b.start_time || b.created_at).toLocaleString()"></td>
+                                            </tr>
+                                        </template>
+                                        <tr x-show="recentBookings.length === 0">
+                                            <td colspan="3" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No recent bookings</td>
                                         </tr>
-                                        @endforeach
                                     </tbody>
                                 </table>
                             </div>

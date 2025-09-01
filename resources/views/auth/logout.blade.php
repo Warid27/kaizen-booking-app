@@ -1,7 +1,7 @@
 {{-- resources/views/auth/logout.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Logout - BookingApp')
+@section('title', 'Logout - KaiBook')
 
 @section('content')
 <div class="min-h-full flex flex-col justify-center py-12 sm:px-6 lg:px-8" x-data x-init="
@@ -21,7 +21,7 @@
                 You've been logged out
             </h2>
             <p class="mt-2 text-center text-sm text-gray-600">
-                Thanks for using BookingApp. You'll be redirected to the home page shortly.
+                Thanks for using KaiBook. You'll be redirected to the home page shortly.
             </p>
             <div class="mt-6">
                 <a href="/" class="font-medium text-blue-600 hover:text-blue-500">

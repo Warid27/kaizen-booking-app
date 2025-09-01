@@ -1,79 +1,97 @@
 {{-- resources/views/bookings/edit.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Edit Booking - BookingApp')
+@section('title', 'Edit Booking - KaiBook')
 
 @section('content')
-@php
-// Mock booking data - in real app this would come from route parameter
-$booking = [
-    'id' => 1,
-    'room_id' => 1,
-    'room_name' => 'Deluxe Suite',
-    'room_type' => 'Suite',
-    'guest_name' => 'John Smith',
-    'guest_email' => 'john.smith@example.com',
-    'guest_phone' => '+1 (555) 123-4567',
-    'check_in' => '2024-08-25',
-    'check_out' => '2024-08-27',
-    'guests' => 2,
-    'total_price' => 900,
-    'status' => 'Confirmed',
-    'special_requests' => 'Late check-in requested. Non-smoking room preferred.'
-];
 
-$availableRooms = [
-    ['id' => 1, 'name' => 'Deluxe Suite', 'type' => 'Suite', 'capacity' => 4, 'price' => 450],
-    ['id' => 2, 'name' => 'Standard Room', 'type' => 'Standard', 'capacity' => 2, 'price' => 200],
-    ['id' => 3, 'name' => 'Executive Suite', 'type' => 'Suite', 'capacity' => 6, 'price' => 600],
-    ['id' => 4, 'name' => 'Family Room', 'type' => 'Family', 'capacity' => 8, 'price' => 350],
-    ['id' => 5, 'name' => 'Economy Room', 'type' => 'Economy', 'capacity' => 2, 'price' => 150],
-];
-@endphp
-
-<div class="px-4 sm:px-6 lg:px-8" x-data="{ 
+<div class="px-4 sm:px-6 lg:px-8" x-data="{
     userRole: $store.auth.role,
-    formData: @js($booking),
-    selectedRoom: null,
-    totalNights: 0,
-    totalPrice: 0,
-    availableRooms: @js($availableRooms),
-    
+    loading: true,
+    bookingId: null,
+    rooms: [],
+    formData: {
+        room_id: null,
+        title: '',
+        description: '',
+        start_time: '',
+        end_time: '',
+        attendees: 1,
+    },
     init() {
-        this.selectedRoom = this.availableRooms.find(room => room.id == this.formData.room_id);
-        this.calculateTotal();
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        // When on /bookings/{id}/edit, last segment is 'edit' -> take the id before it
+        this.bookingId = parts[parts.length - 1] === 'edit' ? parts[parts.length - 2] : parts[parts.length - 1];
+        this.loadData();
     },
-    
-    selectRoom() {
-        this.selectedRoom = this.availableRooms.find(room => room.id == this.formData.room_id);
-        this.calculateTotal();
-    },
-    
-    calculateTotal() {
-        if (this.formData.check_in && this.formData.check_out && this.selectedRoom) {
-            const checkIn = new Date(this.formData.check_in);
-            const checkOut = new Date(this.formData.check_out);
-            const timeDiff = checkOut.getTime() - checkIn.getTime();
-            this.totalNights = Math.ceil(timeDiff / (1000 * 3600 * 24));
-            this.totalPrice = this.totalNights * this.selectedRoom.price;
-        } else {
-            this.totalNights = 0;
-            this.totalPrice = 0;
+    async loadData() {
+        try {
+            const [roomsRes, booking] = await Promise.all([
+                window.roomsAPI.getAll(),
+                window.bookingsAPI.getById(this.bookingId)
+            ]);
+
+            // Normalize rooms (handle array or paginated format)
+            const rawRooms = roomsRes?.data ?? roomsRes;
+            this.rooms = Array.isArray(rawRooms?.data) ? rawRooms.data : (Array.isArray(rawRooms) ? rawRooms : []);
+
+            // Populate form with booking
+            this.formData.room_id = booking.room_id ?? booking.room?.id ?? null;
+            this.formData.title = booking.title ?? '';
+            this.formData.description = booking.description ?? '';
+            this.formData.attendees = booking.attendees ?? 1;
+
+            const toInput = (dt) => {
+                if (!dt) return '';
+                const d = new Date(dt);
+                if (isNaN(d)) return '';
+                const pad = (n) => String(n).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                const MM = pad(d.getMonth() + 1);
+                const dd = pad(d.getDate());
+                const HH = pad(d.getHours());
+                const mm = pad(d.getMinutes());
+                return `${yyyy}-${MM}-${dd}T${HH}:${mm}`;
+            };
+            this.formData.start_time = toInput(booking.start_time);
+            this.formData.end_time = toInput(booking.end_time);
+        } catch (e) {
+            const msg = window.handleApiError ? window.handleApiError(e, 'Failed to load booking') : 'Failed to load booking';
+            alert(msg);
+        } finally {
+            this.loading = false;
         }
     },
-    
-    updateBooking() {
-        // Mock update functionality
-        alert('Booking updated successfully! (Mock operation)');
-        window.location.href = '/bookings/' + this.formData.id;
+    async updateBooking() {
+        try {
+            const toApi = (val) => {
+                if (!val) return '';
+                // From 'YYYY-MM-DDTHH:mm' to 'YYYY-MM-DD HH:mm:SS'
+                return `${val.replace('T', ' ')}:00`;
+            };
+            const payload = {
+                room_id: this.formData.room_id,
+                title: this.formData.title,
+                description: this.formData.description,
+                start_time: toApi(this.formData.start_time),
+                end_time: toApi(this.formData.end_time),
+                attendees: Number(this.formData.attendees)
+            };
+
+            await window.bookingsAPI.update(this.bookingId, payload);
+            // Success feedback and redirect
+            window.location.href = `/bookings/${this.bookingId}`;
+        } catch (e) {
+            const msg = window.handleApiError ? window.handleApiError(e, 'Failed to update booking') : 'Failed to update booking';
+            alert(msg);
+        }
     }
 }">
     <x-breadcrumbs :links="[
         ['label' => 'Home', 'href' => '/'],
         ['label' => 'Dashboard', 'href' => '/dashboard'],
         ['label' => 'Bookings', 'href' => '/bookings'],
-        ['label' => 'Booking #' . $booking['id'], 'href' => '/bookings/' . $booking['id']],
-        ['label' => 'Edit', 'href' => '/bookings/' . $booking['id'] . '/edit']
+        ['label' => 'Edit Booking', 'href' => '/bookings']
     ]" />
 
     <!-- Check if user is authenticated -->
@@ -112,162 +130,111 @@ $availableRooms = [
                         <div>
                             <label for="room_id" class="block text-sm font-medium leading-6 text-gray-900">Select Room</label>
                             <div class="mt-2">
-                                <select 
-                                    id="room_id" 
-                                    name="room_id" 
+                                <select
+                                    id="room_id"
+                                    name="room_id"
                                     x-model="formData.room_id"
-                                    @change="selectRoom()"
                                     class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                                     required
                                 >
-                                    <template x-for="room in availableRooms" :key="room.id">
-                                        <option :value="room.id" x-text="`${room.name} - ${room.type} (${room.capacity} guests) - $${room.price}/night`"></option>
+                                    <option value="" disabled>Select a room</option>
+                                    <template x-for="room in rooms" :key="room.id">
+                                        <option :value="room.id" x-text="room.name"></option>
                                     </template>
                                 </select>
                             </div>
                         </div>
 
-                        <!-- Guest Information -->
-                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                            <div>
-                                <label for="guest_name" class="block text-sm font-medium leading-6 text-gray-900">Guest Name</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="text" 
-                                        name="guest_name" 
-                                        id="guest_name" 
-                                        x-model="formData.guest_name"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        required
-                                    >
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="guest_email" class="block text-sm font-medium leading-6 text-gray-900">Email Address</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="email" 
-                                        name="guest_email" 
-                                        id="guest_email" 
-                                        x-model="formData.guest_email"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        required
-                                    >
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="guest_phone" class="block text-sm font-medium leading-6 text-gray-900">Phone Number</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="tel" 
-                                        name="guest_phone" 
-                                        id="guest_phone" 
-                                        x-model="formData.guest_phone"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                    >
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="guests" class="block text-sm font-medium leading-6 text-gray-900">Number of Guests</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="number" 
-                                        name="guests" 
-                                        id="guests" 
-                                        min="1" 
-                                        :max="selectedRoom ? selectedRoom.capacity : 10"
-                                        x-model="formData.guests"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        required
-                                    >
-                                </div>
-                                <p class="mt-1 text-sm text-gray-500" x-show="selectedRoom">
-                                    Maximum capacity: <span x-text="selectedRoom.capacity"></span> guests
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Dates -->
-                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                            <div>
-                                <label for="check_in" class="block text-sm font-medium leading-6 text-gray-900">Check-in Date</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="date" 
-                                        name="check_in" 
-                                        id="check_in" 
-                                        x-model="formData.check_in"
-                                        @change="calculateTotal()"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        required
-                                    >
-                                </div>
-                            </div>
-
-                            <div>
-                                <label for="check_out" class="block text-sm font-medium leading-6 text-gray-900">Check-out Date</label>
-                                <div class="mt-2">
-                                    <input 
-                                        type="date" 
-                                        name="check_out" 
-                                        id="check_out" 
-                                        x-model="formData.check_out"
-                                        @change="calculateTotal()"
-                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                        required
-                                    >
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Status (Admin only) -->
-                        <div x-show="userRole === 'admin'">
-                            <label for="status" class="block text-sm font-medium leading-6 text-gray-900">Booking Status</label>
-                            <div class="mt-2">
-                                <select 
-                                    id="status" 
-                                    name="status" 
-                                    x-model="formData.status"
-                                    class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                >
-                                    <option value="Pending">Pending</option>
-                                    <option value="Confirmed">Confirmed</option>
-                                    <option value="Completed">Completed</option>
-                                    <option value="Cancelled">Cancelled</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Special Requests -->
+                        <!-- Title -->
                         <div>
-                            <label for="special_requests" class="block text-sm font-medium leading-6 text-gray-900">Special Requests</label>
+                            <label for="title" class="block text-sm font-medium leading-6 text-gray-900">Title</label>
                             <div class="mt-2">
-                                <textarea 
-                                    id="special_requests" 
-                                    name="special_requests" 
-                                    rows="3" 
-                                    x-model="formData.special_requests"
+                                <input
+                                    type="text"
+                                    id="title"
+                                    name="title"
+                                    x-model="formData.title"
                                     class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                    placeholder="Any special requests or requirements..."
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <div>
+                            <label for="description" class="block text-sm font-medium leading-6 text-gray-900">Description</label>
+                            <div class="mt-2">
+                                <textarea
+                                    id="description"
+                                    name="description"
+                                    rows="3"
+                                    x-model="formData.description"
+                                    class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                                    placeholder="Add details about the meeting or event"
                                 ></textarea>
                             </div>
                         </div>
 
-                        <!-- Form Actions -->
+                        <!-- Datetimes -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                            <div>
+                                <label for="start_time" class="block text-sm font-medium leading-6 text-gray-900">Start Time</label>
+                                <div class="mt-2">
+                                    <input
+                                        type="datetime-local"
+                                        id="start_time"
+                                        name="start_time"
+                                        x-model="formData.start_time"
+                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="end_time" class="block text-sm font-medium leading-6 text-gray-900">End Time</label>
+                                <div class="mt-2">
+                                    <input
+                                        type="datetime-local"
+                                        id="end_time"
+                                        name="end_time"
+                                        x-model="formData.end_time"
+                                        class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Attendees -->
+                        <div>
+                            <label for="attendees" class="block text-sm font-medium leading-6 text-gray-900">Attendees</label>
+                            <div class="mt-2">
+                                <input
+                                    type="number"
+                                    id="attendees"
+                                    name="attendees"
+                                    min="1"
+                                    x-model="formData.attendees"
+                                    class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
                         <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-                            <a 
-                                :href="`/bookings/${formData.id}`"
+                            <a
+                                :href="`/bookings/${bookingId}`"
                                 class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                             >
                                 Cancel
                             </a>
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
+                                :disabled="loading"
                                 @click="updateBooking()"
-                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                             >
                                 Update Booking
                             </button>
@@ -276,106 +243,12 @@ $availableRooms = [
                 </div>
             </div>
 
-            <!-- Booking Summary -->
+            <!-- Side panel (optional placeholder) -->
             <div class="space-y-6">
-                <!-- Selected Room -->
-                <div class="bg-white shadow sm:rounded-lg" x-show="selectedRoom">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Selected Room</h3>
-                        <div class="space-y-3">
-                            <div>
-                                <div class="text-sm font-medium text-gray-900" x-text="selectedRoom?.name"></div>
-                                <div class="text-sm text-gray-500" x-text="selectedRoom?.type"></div>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Capacity:</span>
-                                <span class="text-gray-900" x-text="`${selectedRoom?.capacity} guests`"></span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Price per night:</span>
-                                <span class="text-gray-900">$<span x-text="selectedRoom?.price"></span></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Updated Summary -->
-                <div class="bg-white shadow sm:rounded-lg" x-show="totalNights > 0">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Updated Summary</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Check-in:</span>
-                                <span class="text-gray-900" x-text="formData.check_in"></span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Check-out:</span>
-                                <span class="text-gray-900" x-text="formData.check_out"></span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Nights:</span>
-                                <span class="text-gray-900" x-text="totalNights"></span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Guests:</span>
-                                <span class="text-gray-900" x-text="formData.guests"></span>
-                            </div>
-                            <div class="border-t pt-3">
-                                <div class="flex justify-between">
-                                    <span class="text-base font-medium text-gray-900">New Total:</span>
-                                    <span class="text-base font-medium text-gray-900">$<span x-text="totalPrice"></span></span>
-                                </div>
-                                <div class="flex justify-between text-sm mt-1" x-show="totalPrice !== {{ $booking['total_price'] }}">
-                                    <span class="text-gray-500">Previous total:</span>
-                                    <span class="text-gray-500 line-through">${{ $booking['total_price'] }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Current Status -->
                 <div class="bg-white shadow sm:rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Current Status</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Booking ID:</span>
-                                <span class="text-gray-900">#{{ $booking['id'] }}</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Status:</span>
-                                <span 
-                                    class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
-                                    :class="{
-                                        'bg-green-100 text-green-800': formData.status === 'Confirmed',
-                                        'bg-yellow-100 text-yellow-800': formData.status === 'Pending',
-                                        'bg-blue-100 text-blue-800': formData.status === 'Completed',
-                                        'bg-red-100 text-red-800': formData.status === 'Cancelled'
-                                    }"
-                                    x-text="formData.status">
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Help -->
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-blue-800">
-                                Edit Booking
-                            </h3>
-                            <div class="mt-2 text-sm text-blue-700">
-                                <p>This is a demo edit form. No real changes will be saved. Price will automatically recalculate when dates or room selection changes.</p>
-                            </div>
-                        </div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Editing</h3>
+                        <p class="text-sm text-gray-600">Update your booking details and save.</p>
                     </div>
                 </div>
             </div>

@@ -14,7 +14,7 @@ class RoomController extends Controller
      */
     public function index(): JsonResponse
     {
-        $rooms = Room::orderBy('name')->get();
+        $rooms = Room::withCount('bookings')->orderBy('name')->get();
         
         return response()->json([
             'message' => 'Rooms retrieved successfully',

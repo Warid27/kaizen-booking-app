@@ -1,14 +1,14 @@
 {{-- resources/views/welcome.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Welcome to BookingApp')
+@section('title', 'Welcome to KaiBook')
 
 @section('content')
 <div class="px-4 sm:px-6 lg:px-8">
     <!-- Hero Section -->
     <div class="text-center py-12">
         <h1 class="text-4xl font-bold text-gray-900 sm:text-6xl">
-            Welcome to <span class="text-blue-600">BookingApp</span>
+            Welcome to <span class="text-blue-600">KaiBook</span>
         </h1>
         <p class="mt-6 text-lg leading-8 text-gray-600 max-w-2xl mx-auto">
             Your complete room booking solution. Manage rooms, handle reservations, and streamline your hospitality operations with ease.
@@ -86,26 +86,6 @@
         </div>
     </div>
 
-    <!-- Quick Tips -->
-    <div class="bg-blue-50 rounded-lg p-6 mt-12 hover:bg-blue-100 transition-colors duration-200">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <div class="p-2 bg-blue-200 rounded-lg">
-                    <i data-lucide="lightbulb" class="h-5 w-5 text-blue-600"></i>
-                </div>
-            </div>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-800 flex items-center gap-2">
-                    <span>Quick Tip</span>
-                    <i data-lucide="sparkles" class="h-4 w-4"></i>
-                </h3>
-                <div class="mt-2 text-sm text-blue-700">
-                    <p>
-                        This is a demo application. Click the "Login" or "Admin Login" buttons in the navigation to simulate authentication and explore the dashboard features.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
+    
 </div>
 @endsection

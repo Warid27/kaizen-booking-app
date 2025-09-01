@@ -1,7 +1,7 @@
 {{-- resources/views/rooms/create.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Add Room - BookingApp')
+@section('title', 'Add Room - KaiBook')
 
 @section('content')
 <div class="px-4 sm:px-6 lg:px-8" x-data="{ 
@@ -10,7 +10,6 @@
         name: '',
         type: 'Standard',
         capacity: 2,
-        price: 200,
         amenities: '',
         description: ''
     },
@@ -49,7 +48,7 @@
         <div class="sm:flex sm:items-center">
             <div class="sm:flex-auto">
                 <h1 class="text-2xl font-semibold leading-6 text-gray-900">Add New Room</h1>
-                <p class="mt-2 text-sm text-gray-700">Create a new room with details and pricing.</p>
+                <p class="mt-2 text-sm text-gray-700">Create a new room with details.</p>
             </div>
         </div>
 
@@ -103,22 +102,6 @@
                                     min="1" 
                                     max="20"
                                     x-model="formData.capacity"
-                                    class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                                >
-                            </div>
-                        </div>
-
-                        <!-- Price -->
-                        <div>
-                            <label for="price" class="block text-sm font-medium leading-6 text-gray-900">Price per Night ($)</label>
-                            <div class="mt-2">
-                                <input 
-                                    type="number" 
-                                    name="price" 
-                                    id="price" 
-                                    min="0" 
-                                    step="0.01"
-                                    x-model="formData.price"
                                     class="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
                                 >
                             </div>
@@ -190,8 +173,7 @@
                     <div class="mt-2">
                         <p class="text-sm text-gray-500">
                             <span x-text="formData.type"></span> • 
-                            <span x-text="formData.capacity"></span> guests • 
-                            $<span x-text="formData.price"></span>/night
+                            <span x-text="formData.capacity"></span> guests
                         </p>
                         <p class="mt-1 text-sm text-gray-600" x-text="formData.amenities || 'No amenities specified'"></p>
                         <p class="mt-2 text-sm text-gray-700" x-text="formData.description || 'No description provided'"></p>

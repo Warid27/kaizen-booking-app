@@ -37,8 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Bookings CRUD for authenticated users
     Route::apiResource('bookings', BookingController::class);
     
-    // Admin-only routes for rooms management
+    // Rooms - index accessible to any authenticated user; other actions admin-only
+    Route::get('/rooms', [RoomController::class, 'index']);
     Route::middleware('admin')->group(function () {
-        Route::apiResource('rooms', RoomController::class);
+        Route::apiResource('rooms', RoomController::class)->except(['index']);
     });
 });

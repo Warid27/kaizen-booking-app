@@ -1,43 +1,46 @@
 {{-- resources/views/bookings/index.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'My Bookings - BookingApp')
+@section('title', 'My Bookings - KaiBook')
 
 @section('content')
-@php
-$userBookings = [
-    ['id' => 1, 'room_name' => 'Deluxe Suite', 'room_type' => 'Suite', 'check_in' => '2024-08-25', 'check_out' => '2024-08-27', 'guests' => 2, 'total_price' => 900, 'status' => 'Confirmed'],
-    ['id' => 2, 'room_name' => 'Standard Room', 'room_type' => 'Standard', 'check_in' => '2024-09-15', 'check_out' => '2024-09-17', 'guests' => 1, 'total_price' => 400, 'status' => 'Pending'],
-    ['id' => 3, 'room_name' => 'Family Room', 'room_type' => 'Family', 'check_in' => '2024-07-20', 'check_out' => '2024-07-23', 'guests' => 4, 'total_price' => 1050, 'status' => 'Completed'],
-];
-
-$adminBookings = [
-    ['id' => 1, 'room_name' => 'Deluxe Suite', 'guest_name' => 'John Smith', 'check_in' => '2024-08-25', 'check_out' => '2024-08-27', 'guests' => 2, 'total_price' => 900, 'status' => 'Confirmed'],
-    ['id' => 2, 'room_name' => 'Standard Room', 'guest_name' => 'Sarah Johnson', 'check_in' => '2024-08-26', 'check_out' => '2024-08-28', 'guests' => 1, 'total_price' => 400, 'status' => 'Pending'],
-    ['id' => 3, 'room_name' => 'Executive Suite', 'guest_name' => 'Michael Brown', 'check_in' => '2024-08-28', 'check_out' => '2024-08-30', 'guests' => 2, 'total_price' => 1200, 'status' => 'Confirmed'],
-    ['id' => 4, 'room_name' => 'Family Room', 'guest_name' => 'Emily Davis', 'check_in' => '2024-08-29', 'check_out' => '2024-09-01', 'guests' => 4, 'total_price' => 1050, 'status' => 'Confirmed'],
-    ['id' => 5, 'room_name' => 'Standard Room', 'guest_name' => 'David Wilson', 'check_in' => '2024-09-02', 'check_out' => '2024-09-04', 'guests' => 2, 'total_price' => 400, 'status' => 'Pending'],
-];
-@endphp
-
 <div class="px-4 sm:px-6 lg:px-8" x-data="{ 
     userRole: $store.auth.role,
     searchTerm: '', 
     filteredBookings: [],
     allBookings: [],
-    init() {
-        this.allBookings = this.userRole === 'admin' ? @js($adminBookings) : @js($userBookings);
-        this.filteredBookings = this.allBookings;
+    isLoading: false,
+    normalize(b) {
+        const roomName = b.room?.name || b.room_name || `Room #${b.room_id || ''}`.trim();
+        // Use user_id directly (fallback to nested user.id if present)
+        const userId = b.user_id || b.user?.id || '';
+        const checkIn = b.start_time || b.check_in || '';
+        const checkOut = b.end_time || b.check_out || '';
+        const guests = userId || '';
+        const roomType = b.room?.type || b.room_type || '';
+        return { id: b.id, room_name: roomName, user_id: userId, room_type: roomType, check_in: checkIn, check_out: checkOut, guests };
+    },
+    async loadBookings() {
+        this.isLoading = true;
+        try {
+            const data = await window.bookingsAPI.getAll();
+            const list = Array.isArray(data) ? data : (data.data || []);
+            this.allBookings = list.map(this.normalize);
+            this.filteredBookings = this.allBookings;
+        } catch (error) {
+            this.$store.ui.addToast('error', window.handleApiError(error, 'Failed to load bookings'));
+        } finally {
+            this.isLoading = false;
+        }
     },
     filterBookings() {
+        const searchLower = this.searchTerm.toLowerCase();
         this.filteredBookings = this.allBookings.filter(booking => {
-            const searchLower = this.searchTerm.toLowerCase();
-            return booking.room_name.toLowerCase().includes(searchLower) ||
-                   (booking.guest_name && booking.guest_name.toLowerCase().includes(searchLower)) ||
-                   booking.status.toLowerCase().includes(searchLower);
+            return (booking.room_name || '').toLowerCase().includes(searchLower) ||
+                   String(booking.user_id || '').toLowerCase().includes(searchLower);
         });
     }
-}">
+}" x-init="loadBookings()">
     <x-breadcrumbs :links="[
         ['label' => 'Home', 'href' => '/'],
         ['label' => 'Dashboard', 'href' => '/dashboard'],
@@ -91,7 +94,7 @@ $adminBookings = [
                             x-model="searchTerm"
                             @input="filterBookings()"
                             class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
-                            :placeholder="userRole === 'admin' ? 'Search by room, guest, or status...' : 'Search by room or status...'"
+                            :placeholder="userRole === 'admin' ? 'Search by room or user ID...' : 'Search by room...'"
                         >
                     </div>
                 </div>
@@ -106,12 +109,10 @@ $adminBookings = [
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" x-show="userRole === 'admin'">Guest</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" x-show="userRole === 'admin'">User ID</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-in</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-out</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guests</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                         <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
                                     </tr>
                                 </thead>
@@ -122,23 +123,10 @@ $adminBookings = [
                                                 <div class="text-sm font-medium text-gray-900" x-text="booking.room_name"></div>
                                                 <div class="text-sm text-gray-500" x-text="booking.room_type" x-show="booking.room_type"></div>
                                             </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-show="userRole === 'admin'" x-text="booking.guest_name"></td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-show="userRole === 'admin'" x-text="booking.user_id"></td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.check_in"></td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.check_out"></td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.guests"></td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$<span x-text="booking.total_price"></span></td>
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <span 
-                                                    class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
-                                                    :class="{
-                                                        'bg-green-100 text-green-800': booking.status === 'Confirmed',
-                                                        'bg-yellow-100 text-yellow-800': booking.status === 'Pending',
-                                                        'bg-blue-100 text-blue-800': booking.status === 'Completed',
-                                                        'bg-red-100 text-red-800': booking.status === 'Cancelled'
-                                                    }"
-                                                    x-text="booking.status">
-                                                </span>
-                                            </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <div class="flex justify-end space-x-2">
                                                     <a 
@@ -150,18 +138,10 @@ $adminBookings = [
                                                     <a 
                                                         :href="`/bookings/${booking.id}/edit`"
                                                         class="text-blue-600 hover:text-blue-900"
-                                                        x-show="booking.status !== 'Completed'"
                                                     >
                                                         Edit
                                                     </a>
-                                                    <button 
-                                                        type="button"
-                                                        class="text-red-600 hover:text-red-900"
-                                                        @click="alert('Cancel booking functionality (mock)')"
-                                                        x-show="booking.status === 'Pending' || booking.status === 'Confirmed'"
-                                                    >
-                                                        Cancel
-                                                    </button>
+                                                    <!-- Optional: Wire real cancel via API later -->
                                                 </div>
                                             </td>
                                         </tr>
@@ -194,18 +174,6 @@ $adminBookings = [
                     <div class="text-center">
                         <div class="text-2xl font-bold text-gray-900" x-text="allBookings.length"></div>
                         <div class="text-sm text-gray-500">Total Bookings</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-green-600" x-text="allBookings.filter(b => b.status === 'Confirmed').length"></div>
-                        <div class="text-sm text-gray-500">Confirmed</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-yellow-600" x-text="allBookings.filter(b => b.status === 'Pending').length"></div>
-                        <div class="text-sm text-gray-500">Pending</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-blue-600">$<span x-text="allBookings.reduce((sum, b) => sum + b.total_price, 0).toLocaleString()"></span></div>
-                        <div class="text-sm text-gray-500">Total Value</div>
                     </div>
                 </div>
             </div>

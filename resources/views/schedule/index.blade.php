@@ -1,22 +1,9 @@
 {{-- resources/views/schedule/index.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Public Schedule - BookingApp')
+@section('title', 'Public Schedule - KaiBook')
 
 @section('content')
-@php
-$bookings = [
-    ['id' => 1, 'room_name' => 'Deluxe Suite', 'user_name' => 'John Smith', 'check_in' => '2024-08-25', 'check_out' => '2024-08-27', 'status' => 'Confirmed'],
-    ['id' => 2, 'room_name' => 'Standard Room', 'user_name' => 'Sarah Johnson', 'check_in' => '2024-08-26', 'check_out' => '2024-08-28', 'status' => 'Pending'],
-    ['id' => 3, 'room_name' => 'Executive Suite', 'user_name' => 'Michael Brown', 'check_in' => '2024-08-28', 'check_out' => '2024-08-30', 'status' => 'Confirmed'],
-    ['id' => 4, 'room_name' => 'Family Room', 'user_name' => 'Emily Davis', 'check_in' => '2024-08-29', 'check_out' => '2024-09-01', 'status' => 'Confirmed'],
-    ['id' => 5, 'room_name' => 'Standard Room', 'user_name' => 'David Wilson', 'check_in' => '2024-09-02', 'check_out' => '2024-09-04', 'status' => 'Pending'],
-    ['id' => 6, 'room_name' => 'Deluxe Suite', 'user_name' => 'Lisa Anderson', 'check_in' => '2024-09-05', 'check_out' => '2024-09-07', 'status' => 'Confirmed'],
-    ['id' => 7, 'room_name' => 'Executive Suite', 'user_name' => 'Robert Taylor', 'check_in' => '2024-09-08', 'check_out' => '2024-09-10', 'status' => 'Cancelled'],
-    ['id' => 8, 'room_name' => 'Family Room', 'user_name' => 'Jennifer Martinez', 'check_in' => '2024-09-12', 'check_out' => '2024-09-15', 'status' => 'Confirmed']
-];
-@endphp
-
 <div class="px-4 sm:px-6 lg:px-8">
     <x-breadcrumbs :links="[
         ['label' => 'Home', 'href' => '/'],
@@ -26,28 +13,51 @@ $bookings = [
     <div class="sm:flex sm:items-center">
         <div class="sm:flex-auto">
             <h1 class="text-2xl font-semibold leading-6 text-gray-900">Public Booking Schedule</h1>
-            <p class="mt-2 text-sm text-gray-700">View all confirmed and pending bookings across all rooms.</p>
+            <p class="mt-2 text-sm text-gray-700">View the public booking schedule across all rooms.</p>
         </div>
     </div>
 
     <!-- Search and Filters -->
     <div class="mt-6" x-data="{ 
         searchTerm: '', 
-        filteredBookings: @js($bookings),
-        allBookings: @js($bookings),
+        filteredBookings: [],
+        allBookings: [],
+        isLoading: false,
+        normalize(item) {
+            // API returns: { id, title, start_time, end_time, room, user }
+            return {
+                id: item.id,
+                room: item.room || '',
+                user: item.user || '',
+                start_time: item.start_time || '',
+                end_time: item.end_time || ''
+            };
+        },
+        async loadSchedule() {
+            this.isLoading = true;
+            try {
+                const data = await window.scheduleAPI.getSchedule();
+                const list = Array.isArray(data?.schedule) ? data.schedule : [];
+                this.allBookings = list.map(this.normalize);
+                this.filteredBookings = this.allBookings;
+            } catch (error) {
+                this.$store.ui.addToast('error', window.handleApiError(error, 'Failed to load schedule'));
+            } finally {
+                this.isLoading = false;
+            }
+        },
         filterBookings() {
-            this.filteredBookings = this.allBookings.filter(booking => {
-                const searchLower = this.searchTerm.toLowerCase();
-                return booking.room_name.toLowerCase().includes(searchLower) ||
-                       booking.user_name.toLowerCase().includes(searchLower) ||
-                       booking.status.toLowerCase().includes(searchLower);
-            });
+            const q = this.searchTerm.toLowerCase();
+            this.filteredBookings = this.allBookings.filter(b =>
+                (b.room || '').toLowerCase().includes(q) ||
+                (b.user || '').toLowerCase().includes(q)
+            );
         },
         applyFilter() {
             this.filterBookings();
-            $store.ui.addToast('info', `Found ${this.filteredBookings.length} bookings matching your search.`);
+            $store.ui.addToast('info', `Found ${this.filteredBookings.length} items matching your search.`);
         }
-    }">
+    }" x-init="loadSchedule()">
         <x-card>
             <div class="p-6">
                 <div class="flex flex-col sm:flex-row gap-4">
@@ -62,7 +72,7 @@ $bookings = [
                                 x-model="searchTerm"
                                 @input="filterBookings()"
                                 class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
-                                placeholder="Search by room, guest, or status..."
+                                placeholder="Search by room or user..."
                             >
                         </div>
                     </div>
@@ -88,44 +98,35 @@ $bookings = [
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-in</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-out</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 <template x-for="booking in filteredBookings" :key="booking.id">
                                     <tr>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="booking.room_name"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.user_name"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.check_in"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.check_out"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <span 
-                                                class="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
-                                                :class="{
-                                                    'bg-green-100 text-green-800': booking.status === 'Confirmed',
-                                                    'bg-yellow-100 text-yellow-800': booking.status === 'Pending',
-                                                    'bg-red-100 text-red-800': booking.status === 'Cancelled',
-                                                    'bg-blue-100 text-blue-800': booking.status === 'Completed'
-                                                }"
-                                                x-text="booking.status">
-                                            </span>
-                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="booking.room"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.user"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.start_time"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="booking.end_time"></td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
 
                         <!-- Empty State -->
-                        <div x-show="filteredBookings.length === 0" class="text-center py-12">
+                        <div x-show="filteredBookings.length === 0 && !isLoading" class="text-center py-12">
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
-                            <h3 class="mt-2 text-sm font-medium text-gray-900">No bookings found</h3>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">No schedule items</h3>
                             <p class="mt-1 text-sm text-gray-500">Try adjusting your search criteria.</p>
                         </div>
+
+                        <!-- Loading State -->
+                        <div x-show="isLoading" class="text-center py-8 text-sm text-gray-500">Loading schedule...</div>
+
                     </div>
                 </div>
             </div>

@@ -1,36 +1,62 @@
 {{-- resources/views/bookings/show.blade.php --}}
 @extends('layouts.app')
 
-@section('title', 'Booking Details - BookingApp')
+@section('title', 'Booking Details - KaiBook')
 
 @section('content')
-@php
-// Mock booking data - in real app this would come from route parameter
-$booking = [
-    'id' => 1,
-    'room_name' => 'Deluxe Suite',
-    'room_type' => 'Suite',
-    'room_id' => 1,
-    'guest_name' => 'John Smith',
-    'guest_email' => 'john.smith@example.com',
-    'guest_phone' => '+1 (555) 123-4567',
-    'check_in' => '2024-08-25',
-    'check_out' => '2024-08-27',
-    'guests' => 2,
-    'total_price' => 900,
-    'status' => 'Confirmed',
-    'special_requests' => 'Late check-in requested. Non-smoking room preferred.',
-    'created_at' => '2024-08-20 14:30:00',
-    'confirmation_code' => 'BK-2024-001'
-];
-@endphp
 
-<div class="px-4 sm:px-6 lg:px-8" x-data="{ userRole: $store.auth.role }">
+<div class="px-4 sm:px-6 lg:px-8" x-data="{
+    userRole: $store.auth.role,
+    bookingId: null,
+    booking: null,
+    loading: true,
+    showCancelModal: false,
+    deleting: false,
+    init() {
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        this.bookingId = parts[parts.length - 1];
+        this.load();
+    },
+    async load() {
+        try {
+            const data = await window.bookingsAPI.getById(this.bookingId);
+            this.booking = data;
+        } catch (e) {
+            const msg = window.handleApiError ? window.handleApiError(e, 'Failed to load booking') : 'Failed to load booking';
+            alert(msg);
+        } finally {
+            this.loading = false;
+        }
+    },
+    fmtDate(d) {
+        if (!d) return '';
+        const date = new Date(d);
+        return date.toLocaleDateString();
+    },
+    fmtDateTime(d) {
+        if (!d) return '';
+        const date = new Date(d);
+        return date.toLocaleString();
+    },
+    async cancelBooking() {
+        try {
+            this.deleting = true;
+            await window.bookingsAPI.delete(this.bookingId);
+            window.location.href = '/bookings';
+        } catch (e) {
+            const msg = window.handleApiError ? window.handleApiError(e, 'Failed to cancel booking') : 'Failed to cancel booking';
+            alert(msg);
+        } finally {
+            this.deleting = false;
+            this.showCancelModal = false;
+        }
+    }
+}">
     <x-breadcrumbs :links="[
         ['label' => 'Home', 'href' => '/'],
         ['label' => 'Dashboard', 'href' => '/dashboard'],
         ['label' => 'Bookings', 'href' => '/bookings'],
-        ['label' => 'Booking #' . $booking['id'], 'href' => '/bookings/' . $booking['id']]
+        ['label' => 'Booking Details', 'href' => '/bookings']
     ]" />
 
     <!-- Check if user is authenticated -->
@@ -55,15 +81,15 @@ $booking = [
         <div class="sm:flex sm:items-center">
             <div class="sm:flex-auto">
                 <h1 class="text-2xl font-semibold leading-6 text-gray-900">Booking Details</h1>
-                <p class="mt-2 text-sm text-gray-700">Confirmation code: {{ $booking['confirmation_code'] }}</p>
+                <p class="mt-2 text-sm text-gray-700" x-text="booking?.confirmation_code ? `Confirmation code: ${booking.confirmation_code}` : ''"></p>
             </div>
             <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none space-x-3">
-                <a href="/bookings/{{ $booking['id'] }}/edit" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+                <a :href="`/bookings/${bookingId}/edit`" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
                     Edit Booking
                 </a>
                 <button 
                     type="button"
-                    onclick="alert('Cancel booking functionality (mock)')"
+                    @click="showCancelModal = true"
                     class="inline-flex items-center justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700"
                 >
                     Cancel Booking
@@ -80,90 +106,76 @@ $booking = [
                     <div class="px-4 py-5 sm:p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-medium text-gray-900">Booking Information</h3>
-                            <span class="inline-flex px-2 py-1 text-sm font-semibold rounded-full {{ $booking['status'] === 'Confirmed' ? 'bg-green-100 text-green-800' : ($booking['status'] === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ($booking['status'] === 'Completed' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800')) }}">
-                                {{ $booking['status'] }}
-                            </span>
+                            <template x-if="booking">
+                                <span class="inline-flex px-2 py-1 text-sm font-semibold rounded-full"
+                                      :class="{
+                                        'bg-green-100 text-green-800': booking.status === 'Confirmed',
+                                        'bg-yellow-100 text-yellow-800': booking.status === 'Pending',
+                                        'bg-blue-100 text-blue-800': booking.status === 'Completed',
+                                        'bg-red-100 text-red-800': booking.status === 'Cancelled'
+                                      }"
+                                      x-text="booking.status || 'Pending'">
+                                </span>
+                            </template>
                         </div>
                         
                         <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">Booking ID</dt>
-                                <dd class="mt-1 text-sm text-gray-900">#{{ $booking['id'] }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="`#${bookingId}`"></dd>
                             </div>
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">Confirmation Code</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $booking['confirmation_code'] }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="booking?.confirmation_code || '-' "></dd>
                             </div>
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">Room</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $booking['room_name'] }} ({{ $booking['room_type'] }})</dd>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="booking?.room?.name || '-' "></dd>
                             </div>
                             <div>
-                                <dt class="text-sm font-medium text-gray-500">Number of Guests</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $booking['guests'] }}</dd>
+                                <dt class="text-sm font-medium text-gray-500">Attendees</dt>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="booking?.attendees ?? '-' "></dd>
                             </div>
                             <div>
-                                <dt class="text-sm font-medium text-gray-500">Check-in Date</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ date('F j, Y', strtotime($booking['check_in'])) }}</dd>
+                                <dt class="text-sm font-medium text-gray-500">Start</dt>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="fmtDateTime(booking?.start_time)"></dd>
                             </div>
                             <div>
-                                <dt class="text-sm font-medium text-gray-500">Check-out Date</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ date('F j, Y', strtotime($booking['check_out'])) }}</dd>
+                                <dt class="text-sm font-medium text-gray-500">End</dt>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="fmtDateTime(booking?.end_time)"></dd>
                             </div>
                             <div>
-                                <dt class="text-sm font-medium text-gray-500">Total Nights</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ (strtotime($booking['check_out']) - strtotime($booking['check_in'])) / (60*60*24) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500">Total Price</dt>
-                                <dd class="mt-1 text-sm text-gray-900">${{ number_format($booking['total_price']) }}</dd>
+                                <dt class="text-sm font-medium text-gray-500">Booked By</dt>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="booking?.user?.name || '-' "></dd>
                             </div>
                             <div class="sm:col-span-2">
                                 <dt class="text-sm font-medium text-gray-500">Booking Date</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ date('F j, Y \a\t g:i A', strtotime($booking['created_at'])) }}</dd>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="fmtDateTime(booking?.created_at)"></dd>
                             </div>
                         </dl>
                     </div>
                 </div>
 
-                <!-- Guest Information -->
-                <div class="bg-white shadow sm:rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Guest Information</h3>
-                        <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500">Guest Name</dt>
-                                <dd class="mt-1 text-sm text-gray-900">{{ $booking['guest_name'] }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500">Email Address</dt>
-                                <dd class="mt-1 text-sm text-gray-900">
-                                    <a href="mailto:{{ $booking['guest_email'] }}" class="text-blue-600 hover:text-blue-500">
-                                        {{ $booking['guest_email'] }}
-                                    </a>
-                                </dd>
-                            </div>
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500">Phone Number</dt>
-                                <dd class="mt-1 text-sm text-gray-900">
-                                    <a href="tel:{{ $booking['guest_phone'] }}" class="text-blue-600 hover:text-blue-500">
-                                        {{ $booking['guest_phone'] }}
-                                    </a>
-                                </dd>
-                            </div>
-                        </dl>
+                <!-- Description (if any) -->
+                <template x-if="booking?.description">
+                    <div class="bg-white shadow sm:rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Description</h3>
+                            <p class="text-sm text-gray-700" x-text="booking.description"></p>
+                        </div>
                     </div>
-                </div>
+                </template>
 
-                <!-- Special Requests -->
-                @if($booking['special_requests'])
-                <div class="bg-white shadow sm:rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Special Requests</h3>
-                        <p class="text-sm text-gray-700">{{ $booking['special_requests'] }}</p>
+                <!-- Room Details quick view -->
+                <template x-if="booking?.room">
+                    <div class="bg-white shadow sm:rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Room</h3>
+                            <p class="text-sm text-gray-700" x-text="booking.room.name"></p>
+                            <p class="text-sm text-gray-500" x-text="`Capacity: ${booking.room.capacity}`"></p>
+                        </div>
                     </div>
-                </div>
-                @endif
+                </template>
             </div>
 
             <!-- Sidebar -->
@@ -194,7 +206,7 @@ $booking = [
                                 Email Confirmation
                             </button>
                             <a 
-                                href="/rooms/{{ $booking['room_id'] }}"
+                                :href="booking?.room?.id ? `/rooms/${booking.room.id}` : '#'"
                                 class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                                 x-show="userRole === 'admin'"
                             >
@@ -227,7 +239,7 @@ $booking = [
                                             <div class="min-w-0 flex-1 pt-1.5">
                                                 <div>
                                                     <p class="text-sm text-gray-500">Booking created</p>
-                                                    <p class="text-xs text-gray-400">{{ date('M j, Y \a\t g:i A', strtotime($booking['created_at'])) }}</p>
+                                                    <p class="text-xs text-gray-400" x-text="fmtDateTime(booking?.created_at)"></p>
                                                 </div>
                                             </div>
                                         </div>
@@ -247,7 +259,7 @@ $booking = [
                                             <div class="min-w-0 flex-1 pt-1.5">
                                                 <div>
                                                     <p class="text-sm text-gray-500">Booking confirmed</p>
-                                                    <p class="text-xs text-gray-400">{{ date('M j, Y \a\t g:i A', strtotime($booking['created_at'] . ' +1 hour')) }}</p>
+                                                    <p class="text-xs text-gray-400" x-text="fmtDateTime(booking?.created_at)"></p>
                                                 </div>
                                             </div>
                                         </div>
@@ -265,8 +277,8 @@ $booking = [
                                             </div>
                                             <div class="min-w-0 flex-1 pt-1.5">
                                                 <div>
-                                                    <p class="text-sm text-gray-500">Check-in scheduled</p>
-                                                    <p class="text-xs text-gray-400">{{ date('M j, Y', strtotime($booking['check_in'])) }}</p>
+                                                    <p class="text-sm text-gray-500">Start scheduled</p>
+                                                    <p class="text-xs text-gray-400" x-text="fmtDate(booking?.start_time)"></p>
                                                 </div>
                                             </div>
                                         </div>
@@ -277,39 +289,50 @@ $booking = [
                     </div>
                 </div>
 
-                <!-- Payment Information -->
+                <!-- Meta -->
                 <div class="bg-white shadow sm:rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Payment Information</h3>
-                        <div class="space-y-3">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Room rate:</span>
-                                <span class="text-gray-900">${{ number_format($booking['total_price'] / ((strtotime($booking['check_out']) - strtotime($booking['check_in'])) / (60*60*24))) }}/night</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Nights:</span>
-                                <span class="text-gray-900">{{ (strtotime($booking['check_out']) - strtotime($booking['check_in'])) / (60*60*24) }}</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Subtotal:</span>
-                                <span class="text-gray-900">${{ number_format($booking['total_price']) }}</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-gray-500">Taxes & fees:</span>
-                                <span class="text-gray-900">$0</span>
-                            </div>
-                            <div class="border-t pt-3">
-                                <div class="flex justify-between">
-                                    <span class="text-base font-medium text-gray-900">Total:</span>
-                                    <span class="text-base font-medium text-gray-900">${{ number_format($booking['total_price']) }}</span>
-                                </div>
-                            </div>
-                            <div class="mt-4">
-                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                    Payment Confirmed
-                                </span>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Meta</h3>
+                        <div class="space-y-2 text-sm text-gray-700">
+                            <div>Created: <span x-text="fmtDateTime(booking?.created_at)"></span></div>
+                            <div>Updated: <span x-text="fmtDateTime(booking?.updated_at)"></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cancel Confirmation Modal -->
+    <div
+        x-show="showCancelModal"
+        class="relative z-10"
+        aria-labelledby="modal-title" role="dialog" aria-modal="true"
+        x-cloak
+    >
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 4.93l14.14 14.14M12 2a10 10 0 100 20 10 10 0 000-20z" />
+                            </svg>
+                        </div>
+                        <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                            <h3 class="text-base font-semibold leading-6 text-gray-900" id="modal-title">Cancel this booking?</h3>
+                            <div class="mt-2">
+                                <p class="text-sm text-gray-500">This action cannot be undone. The booking will be permanently deleted.</p>
                             </div>
                         </div>
+                    </div>
+                    <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                        <button type="button" @click="cancelBooking()" :disabled="deleting" class="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto disabled:opacity-50">
+                            <span x-show="!deleting">Delete</span>
+                            <span x-show="deleting">Deleting...</span>
+                        </button>
+                        <button type="button" @click="showCancelModal = false" :disabled="deleting" class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto disabled:opacity-50">Cancel</button>
                     </div>
                 </div>
             </div>

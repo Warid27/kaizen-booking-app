@@ -2,42 +2,96 @@
 <!DOCTYPE html>
 <html lang="en" x-data="{ 
     init() {
-        // Initialize auth store
+        // Initialize auth store (no demo/mock state)
         Alpine.store('auth', {
-            isAuthed: localStorage.getItem('mockAuth') === 'true',
-            role: localStorage.getItem('mockRole') || 'user',
-            userName: localStorage.getItem('mockUserName') || 'Demo User',
-            
-            login(role = 'user') {
-                this.isAuthed = true;
-                this.role = role;
-                this.userName = role === 'admin' ? 'Admin User' : 'Demo User';
-                localStorage.setItem('mockAuth', 'true');
-                localStorage.setItem('mockRole', role);
-                localStorage.setItem('mockUserName', this.userName);
-            },
-            
-            logout() {
-                this.isAuthed = false;
-                this.role = 'user';
-                this.userName = 'Demo User';
-                localStorage.removeItem('mockAuth');
-                localStorage.removeItem('mockRole');
-                localStorage.removeItem('mockUserName');
-            },
-            
-            toggleAuth() {
-                if (this.isAuthed) {
-                    this.logout();
-                } else {
-                    this.login(this.role);
+            isAuthed: false,
+            role: 'user',
+            userName: '',
+            user: null,
+
+            async login(credentials) {
+                try {
+                    const response = await window.authAPI.login(credentials);
+                    if (response.token) {
+                        this.isAuthed = true;
+                        this.role = response.user.role || 'user';
+                        this.userName = response.user.name;
+                        this.user = response.user;
+                        return { success: true, data: response };
+                    }
+                    return { success: false, error: 'Login failed' };
+                } catch (error) {
+                    return { success: false, error: window.handleApiError(error) };
                 }
             },
-            
-            setRole(role) {
-                this.role = role;
+
+            async register(userData) {
+                try {
+                    const response = await window.authAPI.register(userData);
+                    if (response.token) {
+                        this.isAuthed = true;
+                        this.role = response.user.role || 'user';
+                        this.userName = response.user.name;
+                        this.user = response.user;
+                        return { success: true, data: response };
+                    }
+                    return { success: false, error: 'Registration failed' };
+                } catch (error) {
+                    return { success: false, error: window.handleApiError(error) };
+                }
+            },
+
+            async logout() {
+                try {
+                    await window.authAPI.logout();
+                } catch (error) {
+                    console.error('Logout error:', error);
+                } finally {
+                    this.isAuthed = false;
+                    this.role = 'user';
+                    this.userName = '';
+                    this.user = null;
+                    
+                    localStorage.removeItem('authToken');
+
+                    // Show success modal and redirect to /login on confirm
+                    try {
+                        const ui = Alpine.store('ui');
+                        if (ui && typeof ui.showModal === 'function') {
+                            ui.showModal(
+                                'Logout Successful',
+                                'You have been logged out successfully.',
+                                () => { window.location.href = '/login'; },
+                                null,
+                                'OK',
+                                ''
+                            );
+                        } else {
+                            window.location.href = '/login';
+                        }
+                    } catch (e) {
+                        window.location.href = '/login';
+                    }
+                }
+            },
+
+            async fetchUser() {
+                try {
+                    const response = await window.authAPI.getUser();
+                    this.user = response;
+                    this.userName = response.name;
+                    this.role = response.role || 'user';
+                } catch (error) {
+                    console.error('Fetch user error:', error);
+                    this.logout();
+                }
+            },
+
+            init() {
+                // Real auth init: rely on token existence only
+                this.isAuthed = !!localStorage.getItem('authToken');
                 if (this.isAuthed) {
-                    this.login(role);
+                    this.fetchUser();
                 }
             }
         });
@@ -105,9 +159,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'BookingApp')</title>
+    <title>@yield('title', 'KaiBook')</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen" x-init="lucide.createIcons()">
@@ -136,8 +191,8 @@
                 <!-- Logo -->
                 <div class="flex-shrink-0 flex items-center">
                     <a href="/" class="flex items-center space-x-2 text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors duration-200">
-                        <i data-lucide="calendar-check" class="h-6 w-6"></i>
-                        <span>BookingApp</span>
+                        <img src="/favicon.svg" alt="KaiBook logo" class="h-6 w-6 object-contain" />
+                        <span>KaiBook</span>
                     </a>
                 </div>
 
@@ -187,12 +242,10 @@
                                 @click.away="open = false"
                                 class="flex items-center space-x-3 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
                             >
-                                <img 
-                                    class="h-8 w-8 rounded-full object-cover ring-2 ring-white shadow-sm" 
-                                    src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
-                                    alt="Profile"
-                                >
-                                <span class="text-gray-700 font-medium">John Doe</span>
+                                <div class="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm">
+                                    <i data-lucide="user" class="h-4 w-4 text-blue-600"></i>
+                                </div>
+                                <span class="text-gray-700 font-medium" x-text="$store.auth.userName"></span>
                                 <svg class="h-4 w-4 text-gray-400 transition-transform duration-200" :class="{ 'rotate-180': open }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                 </svg>
@@ -201,6 +254,7 @@
                             <!-- Dropdown menu -->
                             <div 
                                 x-show="open"
+                                x-effect="open && lucide.createIcons()"
                                 x-transition:enter="transition ease-out duration-200"
                                 x-transition:enter-start="opacity-0 scale-95"
                                 x-transition:enter-end="opacity-100 scale-100"
@@ -233,18 +287,8 @@
                     </template>
                     <template x-if="!$store.auth.isAuthed">
                         <div class="flex items-center space-x-4">
-                            <button 
-                                @click="$store.auth.login('user')" 
-                                class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                            >
-                                Login
-                            </button>
-                            <button 
-                                @click="$store.auth.login('admin')" 
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                            >
-                                Admin Login
-                            </button>
+                            <a href="/login" class="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200">Login</a>
+                            <a href="/register" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200">Register</a>
                         </div>
                     </template>
                 </div>
@@ -281,14 +325,12 @@
                         <div>
                             <!-- Profile section -->
                             <div class="flex items-center px-3 py-3 border-b border-gray-200">
-                                <img 
-                                    class="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow-sm" 
-                                    src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
-                                    alt="Profile"
-                                >
+                                <div class="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm">
+                                    <i data-lucide="user" class="h-5 w-5 text-blue-600"></i>
+                                </div>
                                 <div class="ml-3">
-                                    <div class="text-base font-medium text-gray-800">John Doe</div>
-                                    <div class="text-sm text-gray-500">john@example.com</div>
+                                    <div class="text-base font-medium text-gray-800" x-text="$store.auth.userName"></div>
+                                    <div class="text-sm text-gray-500" x-text="$store.auth.user?.email || ''"></div>
                                 </div>
                             </div>
                             
@@ -327,18 +369,8 @@
                     </template>
                     <template x-if="!$store.auth.isAuthed">
                         <div class="space-y-1">
-                            <button 
-                                @click="$store.auth.login('user'); mobileMenuOpen = false" 
-                                class="block w-full text-left px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-                            >
-                                Login
-                            </button>
-                            <button 
-                                @click="$store.auth.login('admin'); mobileMenuOpen = false" 
-                                class="block w-full text-left px-3 py-2 text-base font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-md transition-colors"
-                            >
-                                Admin Login
-                            </button>
+                            <a href="/login" class="block px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors">Login</a>
+                            <a href="/register" class="block px-3 py-2 text-base font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">Register</a>
                         </div>
                     </template>
                 </div>
@@ -425,9 +457,7 @@
     <!-- Footer -->
     <footer class="bg-white border-t border-gray-200 mt-12">
         <div class="mx-auto max-w-7xl py-6 px-4 sm:px-6 lg:px-8">
-            <p class="text-center text-sm text-gray-500">
-                © 2024 BookingApp. This is a demo application with mock data.
-            </p>
+            <p class="text-center text-sm text-gray-500">© 2025 KaiBook.</p>
         </div>
     </footer>
 
