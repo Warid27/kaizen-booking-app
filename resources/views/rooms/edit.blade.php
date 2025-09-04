@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="px-4 sm:px-6 lg:px-8" x-data="{ 
-    userRole: $store.auth.role,
+    userRole: localStorage.getItem('mockRole') || $store.auth.role,
     loading: true,
     error: null,
     formData: { id: null, name: '', description: '', capacity: null, location: '', amenitiesText: '' },
