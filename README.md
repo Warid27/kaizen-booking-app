@@ -84,6 +84,11 @@ php artisan serve
 npm run dev
 ```
 
+Or in one terminals, run:
+
+```bash
+npm run dev:all
+```
 The app will be available at:  
 👉 `http://127.0.0.1:8000`
 
