@@ -1,11 +1,10 @@
 {
-    "$schema": "https://json.schemastore.org/package.json",
     "private": true,
     "type": "module",
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "dev:all": "concurrently \"npm run dev\" \"php artisan serve\""
+        "dev:all": "concurrently \"php artisan serve\" \"npm run dev\""
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

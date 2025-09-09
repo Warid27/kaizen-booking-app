@@ -27,17 +27,6 @@
                         <p class="text-gray-600 mt-1" x-text="userInfo.email"></p>
                         <p class="text-sm text-gray-500 mt-2" x-text="userInfo.memberSince ? ('Member since ' + userInfo.memberSince) : ''"></p>
                         
-                        <!-- Quick Stats -->
-                        <div class="mt-6 grid grid-cols-2 gap-4 text-center">
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <div class="text-2xl font-bold text-blue-600">12</div>
-                                <div class="text-xs text-gray-600">Total Bookings</div>
-                            </div>
-                            <div class="bg-gray-50 rounded-lg p-3">
-                                <div class="text-2xl font-bold text-green-600">8</div>
-                                <div class="text-xs text-gray-600">Completed</div>
-                            </div>
-                        </div>
                     </div>
                 </x-card>
             </div>

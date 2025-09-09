@@ -91,9 +91,9 @@
                         <label for="remember-me" class="ml-3 block text-sm leading-6 text-gray-900">Remember me</label>
                     </div>
 
-                    <div class="text-sm leading-6">
+                    <!-- <div class="text-sm leading-6">
                         <a href="/password/reset" class="font-semibold text-blue-600 hover:text-blue-500">Forgot password?</a>
-                    </div>
+                    </div> -->
                 </div>
 
                 <div>

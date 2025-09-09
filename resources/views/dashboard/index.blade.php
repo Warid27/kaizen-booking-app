@@ -4,13 +4,6 @@
 @section('title', 'Dashboard - KaiBook')
 
 @section('content')
-@php
-$userBookings = [
-    ['id' => 1, 'room_name' => 'Deluxe Suite', 'check_in' => '2024-08-25', 'check_out' => '2024-08-27', 'status' => 'Confirmed'],
-    ['id' => 2, 'room_name' => 'Standard Room', 'check_in' => '2024-09-15', 'check_out' => '2024-09-17', 'status' => 'Pending'],
-];
-@endphp
-
 <div class="px-4 sm:px-6 lg:px-8" x-data="{
     userRole: $store.auth.role,
     rooms: [],
@@ -80,7 +73,7 @@ $userBookings = [
                             <div class="ml-5 w-0 flex-1">
                                 <dl>
                                     <dt class="text-sm font-medium text-gray-500 truncate">My Bookings</dt>
-                                    <dd class="text-lg font-medium text-gray-900">{{ count($userBookings) }}</dd>
+                                    <dd class="text-lg font-medium text-gray-900" x-text="Array.isArray(bookings) ? bookings.length : 0"></dd>
                                 </dl>
                             </div>
                         </div>
@@ -157,22 +150,19 @@ $userBookings = [
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-in</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check-out</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        @foreach($userBookings as $booking)
-                                        <tr>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $booking['room_name'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $booking['check_in'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $booking['check_out'] }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap">
-                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {{ $booking['status'] === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">
-                                                    {{ $booking['status'] }}
-                                                </span>
-                                            </td>
+                                        <template x-for="b in recentBookings" :key="b.id">
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="b.room?.name || ('Room #' + (b.room_id ?? ''))"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="new Date(b.start_time || b.created_at).toLocaleDateString()"></td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="new Date(b.end_time || b.start_time).toLocaleDateString()"></td>
+                                            </tr>
+                                        </template>
+                                        <tr x-show="!Array.isArray(recentBookings) || recentBookings.length === 0">
+                                            <td colspan="4" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">Data belum ada</td>
                                         </tr>
-                                        @endforeach
                                     </tbody>
                                 </table>
                             </div>
